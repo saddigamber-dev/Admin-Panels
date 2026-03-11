@@ -5,47 +5,84 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Neon Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-container">
             <img src="https://i.ibb.co/1GBn25c5/VID-20260310-172522-610-ezgif-com-video-to-gif-converter.gif" alt="Logo" class="nav-logo">
             <div class="nav-user">Admin: {{ session.username }}</div>
-            <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+            <a href="{{ url_for('logout') }}" class="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
     </nav>
 
     <div class="container">
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <i class="fas fa-users"></i>
+                <h3>Total Users</h3>
+                <div class="stat-value">{{ total_users }}</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-rupee-sign"></i>
+                <h3>Total Revenue</h3>
+                <div class="stat-value">₹{{ total_revenue }}</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-coins"></i>
+                <h3>Credits Sold</h3>
+                <div class="stat-value">{{ total_credits_sold }}</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-clock"></i>
+                <h3>Pending Payments</h3>
+                <div class="stat-value">{{ pending_payments }}</div>
+            </div>
+            <div class="stat-card">
+                <i class="fas fa-key"></i>
+                <h3>Active Keys</h3>
+                <div class="stat-value">{{ active_keys }}</div>
+            </div>
+        </div>
+
+        <!-- Dashboard Tabs -->
         <div class="dashboard-tabs">
-            <button class="tab-btn active" data-tab="users">Users</button>
-            <button class="tab-btn" data-tab="payments">Payments</button>
-            <button class="tab-btn" data-tab="licenses">Licenses</button>
-            <button class="tab-btn" data-tab="products">Products</button>
+            <button class="tab-btn active" data-tab="users"><i class="fas fa-users"></i> Users</button>
+            <button class="tab-btn" data-tab="payments"><i class="fas fa-credit-card"></i> Payments</button>
+            <button class="tab-btn" data-tab="licenses"><i class="fas fa-key"></i> Licenses</button>
+            <button class="tab-btn" data-tab="products"><i class="fas fa-box"></i> Products</button>
         </div>
 
         <!-- Users Tab -->
         <div id="users-tab" class="tab-content active">
             <div class="card">
-                <h2>Manage Users</h2>
+                <h2><i class="fas fa-users"></i> Manage Users</h2>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
                                 <th>Username</th>
                                 <th>Credits</th>
-                                <th>Role</th>
+                                <th>Total Recharged</th>
+                                <th>Joined</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for user in users %}
                             <tr>
-                                <td>{{ user[1] }}</td>
-                                <td>{{ user[4] }}</td>
-                                <td>{{ user[3] }}</td>
+                                <td><i class="fas fa-user"></i> {{ user[1] }}</td>
+                                <td class="neon-text-green">{{ user[4] }}</td>
+                                <td>₹{{ user[5] or 0 }}</td>
+                                <td>{{ user[6][:10] if user[6] else 'N/A' }}</td>
                                 <td>
-                                    <button class="btn-small btn-add-credits" data-username="{{ user[1] }}">Add Credits</button>
-                                    <button class="btn-small btn-danger btn-delete-user" data-username="{{ user[1] }}">Delete</button>
+                                    <button class="btn-small btn-add-credits" data-username="{{ user[1] }}">
+                                        <i class="fas fa-plus-circle"></i> Add Credits
+                                    </button>
+                                    <button class="btn-small btn-danger btn-delete-user" data-username="{{ user[1] }}">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -58,7 +95,15 @@
         <!-- Payments Tab -->
         <div id="payments-tab" class="tab-content">
             <div class="card">
-                <h2>Payment Requests</h2>
+                <h2><i class="fas fa-credit-card"></i> Payment Requests</h2>
+                <div class="support-links-bar">
+                    <a href="{{ whatsapp_link }}" target="_blank" class="btn-whatsapp-support">
+                        <i class="fab fa-whatsapp"></i> WhatsApp Support
+                    </a>
+                    <a href="{{ telegram_channel }}" target="_blank" class="btn-telegram-support">
+                        <i class="fab fa-telegram"></i> Telegram Channel
+                    </a>
+                </div>
                 <div class="table-container">
                     <table>
                         <thead>
@@ -66,26 +111,45 @@
                                 <th>Username</th>
                                 <th>UTR</th>
                                 <th>Amount (₹)</th>
-                                <th>Credits to Add</th>
+                                <th>Credits</th>
                                 <th>Date</th>
                                 <th>Status</th>
-                                <th>Action</th>
+                                <th>Actions</th>
+                                <th>Support</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for payment in payments %}
-                            <tr>
-                                <td>{{ payment[1] }}</td>
-                                <td>{{ payment[2] }}</td>
-                                <td>₹{{ payment[3] }}</td>
-                                <td>{{ payment[4] }}</td>
-                                <td>{{ payment[6] }}</td>
-                                <td><span class="status-badge status-{{ payment[5] }}">{{ payment[5] }}</span></td>
+                            <tr class="payment-row status-{{ payment[5] }}">
+                                <td><i class="fas fa-user"></i> {{ payment[1] }}</td>
+                                <td class="utr-cell">{{ payment[2] }}</td>
+                                <td class="neon-text">₹{{ payment[3] }}</td>
+                                <td class="neon-text-green">{{ payment[4] }}</td>
+                                <td>{{ payment[6][:16] }}</td>
+                                <td>
+                                    <span class="status-badge status-{{ payment[5] }}">
+                                        {{ payment[5] }}
+                                    </span>
+                                </td>
                                 <td>
                                     {% if payment[5] == 'pending' %}
-                                    <button class="btn-small btn-approve-payment" data-payment-id="{{ payment[0] }}">Approve</button>
-                                    <button class="btn-small btn-danger btn-reject-payment" data-payment-id="{{ payment[0] }}">Reject</button>
+                                    <button class="btn-small btn-approve-payment" data-payment-id="{{ payment[0] }}">
+                                        <i class="fas fa-check"></i> Approve
+                                    </button>
+                                    <button class="btn-small btn-danger btn-reject-payment" data-payment-id="{{ payment[0] }}">
+                                        <i class="fas fa-times"></i> Reject
+                                    </button>
+                                    {% elif payment[5] == 'approved' %}
+                                    <span class="approved-by">By: {{ payment[8] or 'Admin' }}</span>
                                     {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ whatsapp_link }}" target="_blank" class="btn-icon whatsapp-icon" title="WhatsApp">
+                                        <i class="fab fa-whatsapp"></i>
+                                    </a>
+                                    <a href="{{ telegram_channel }}" target="_blank" class="btn-icon telegram-icon" title="Telegram">
+                                        <i class="fab fa-telegram"></i>
+                                    </a>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -98,7 +162,7 @@
         <!-- Licenses Tab -->
         <div id="licenses-tab" class="tab-content">
             <div class="card">
-                <h2>All Generated Keys</h2>
+                <h2><i class="fas fa-key"></i> All Generated Keys</h2>
                 <div class="table-container">
                     <table>
                         <thead>
@@ -107,8 +171,8 @@
                                 <th>Username</th>
                                 <th>Product</th>
                                 <th>Days</th>
-                                <th>Credits Used</th>
-                                <th>Expiry Date</th>
+                                <th>Credits</th>
+                                <th>Expiry</th>
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
@@ -117,14 +181,16 @@
                             {% for license in licenses %}
                             <tr>
                                 <td class="key-cell">{{ license[1] }}</td>
-                                <td>{{ license[2] }}</td>
+                                <td><i class="fas fa-user"></i> {{ license[2] }}</td>
                                 <td>{{ license[3] }}</td>
-                                <td>{{ license[4] }} days</td>
+                                <td>{{ license[4] }}d</td>
                                 <td>{{ license[5] }}</td>
-                                <td>{{ license[6] }}</td>
+                                <td>{{ license[6][:10] }}</td>
                                 <td><span class="status-badge status-{{ license[7] }}">{{ license[7] }}</span></td>
                                 <td>
-                                    <button class="btn-small btn-danger btn-delete-key" data-license-id="{{ license[0] }}">Delete</button>
+                                    <button class="btn-small btn-danger btn-delete-key" data-license-id="{{ license[0] }}">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -137,38 +203,44 @@
         <!-- Products Tab -->
         <div id="products-tab" class="tab-content">
             <div class="card">
-                <h2>Manage Products</h2>
-                <button class="btn-primary" id="add-product-btn">Add New Product</button>
+                <h2><i class="fas fa-box"></i> Manage Products</h2>
+                <button class="btn-primary" id="add-product-btn">
+                    <i class="fas fa-plus"></i> Add New Product
+                </button>
                 
                 <div id="add-product-form" style="display: none;" class="form-container">
-                    <h3>Add New Product</h3>
+                    <h3><i class="fas fa-plus-circle"></i> Add New Product</h3>
                     <div class="form-group">
-                        <label>Product Name:</label>
-                        <input type="text" id="new-product-name" required>
+                        <label><i class="fas fa-tag"></i> Product Name:</label>
+                        <input type="text" id="new-product-name" placeholder="Enter product name" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label><i class="fas fa-coins"></i> Credits/Day:</label>
+                            <input type="number" step="0.5" id="new-product-credits" placeholder="10" required>
+                        </div>
+                        <div class="form-group">
+                            <label><i class="fas fa-rupee-sign"></i> Price/Day:</label>
+                            <input type="number" step="1" id="new-product-price" placeholder="20" required>
+                        </div>
                     </div>
                     <div class="form-group">
-                        <label>Credits per Day:</label>
-                        <input type="number" step="0.5" id="new-product-credits" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Price per Day (₹):</label>
-                        <input type="number" step="1" id="new-product-price" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Key Type:</label>
+                        <label><i class="fas fa-key"></i> Key Type:</label>
                         <select id="new-product-keytype">
-                            <option value="fluorite">Fluorite/Gbox (16 chars alphanumeric)</option>
-                            <option value="drip">Drip (10 digits)</option>
-                            <option value="hg">HG Cheat (HG-XXXXXX)</option>
-                            <option value="brmod">BRMod (Username + Password)</option>
-                            <option value="lkteam">LKTEAM (LKTEAM-XXXXXX)</option>
-                            <option value="strict">Strict (STRICT-8 digits)</option>
-                            <option value="spotify">Spotify (Email + Password)</option>
-                            <option value="standard">Standard (KEY-XXXX-XXXX-XXXX)</option>
+                            <option value="fluorite">🔷 Fluorite/Gbox (16 chars)</option>
+                            <option value="drip">🔢 Drip (10 digits)</option>
+                            <option value="hg">⚡ HG Cheat (HG-XXXXXX)</option>
+                            <option value="brmod">👤 BRMod (User+Pass)</option>
+                            <option value="lkteam">🔑 LKTEAM (LKTEAM-XXXXXX)</option>
+                            <option value="strict">⚠️ Strict (STRICT-8 digits)</option>
+                            <option value="spotify">🎵 Spotify (Email+Pass)</option>
+                            <option value="standard">📋 Standard (KEY-XXXX-XXXX)</option>
                         </select>
                     </div>
-                    <button class="btn-primary" id="save-product">Save Product</button>
-                    <button class="btn-secondary" id="cancel-product">Cancel</button>
+                    <div class="form-actions">
+                        <button class="btn-primary" id="save-product"><i class="fas fa-save"></i> Save Product</button>
+                        <button class="btn-secondary" id="cancel-product"><i class="fas fa-times"></i> Cancel</button>
+                    </div>
                 </div>
 
                 <div class="table-container">
@@ -177,8 +249,9 @@
                             <tr>
                                 <th>Product Name</th>
                                 <th>Credits/Day</th>
-                                <th>Price/Day (₹)</th>
+                                <th>Price/Day</th>
                                 <th>Key Type</th>
+                                <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -186,12 +259,26 @@
                             {% for product in products %}
                             <tr>
                                 <td>{{ product[1] }}</td>
-                                <td>{{ product[2] }}</td>
-                                <td>₹{{ product[3] }}</td>
+                                <td class="neon-text-green">{{ product[2] }}</td>
+                                <td class="neon-text">₹{{ product[3] }}</td>
                                 <td><span class="key-type-badge">{{ product[4] }}</span></td>
                                 <td>
-                                    <button class="btn-small btn-edit-product" data-product-id="{{ product[0] }}">Edit</button>
-                                    <button class="btn-small btn-danger btn-delete-product" data-product-id="{{ product[0] }}">Delete</button>
+                                    <span class="status-badge status-{{ 'active' if product[5] else 'inactive' }}">
+                                        {{ 'Active' if product[5] else 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn-small btn-edit-product" data-product-id="{{ product[0] }}">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
+                                    <button class="btn-small {% if product[5] %}btn-warning{% else %}btn-success{% endif %} btn-toggle-product" 
+                                            data-product-id="{{ product[0] }}" data-active="{{ product[5] }}">
+                                        <i class="fas {% if product[5] %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
+                                        {{ 'Disable' if product[5] else 'Enable' }}
+                                    </button>
+                                    <button class="btn-small btn-danger btn-delete-product" data-product-id="{{ product[0] }}">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -205,51 +292,240 @@
     <!-- Edit Product Modal -->
     <div id="edit-product-modal" class="modal" style="display: none;">
         <div class="modal-content">
-            <h3>Edit Product</h3>
+            <h3><i class="fas fa-edit"></i> Edit Product</h3>
             <input type="hidden" id="edit-product-id">
             <div class="form-group">
-                <label>Product Name:</label>
-                <input type="text" id="edit-product-name">
+                <label><i class="fas fa-tag"></i> Product Name:</label>
+                <input type="text" id="edit-product-name" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label><i class="fas fa-coins"></i> Credits/Day:</label>
+                    <input type="number" step="0.5" id="edit-product-credits" required>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-rupee-sign"></i> Price/Day:</label>
+                    <input type="number" step="1" id="edit-product-price" required>
+                </div>
             </div>
             <div class="form-group">
-                <label>Credits per Day:</label>
-                <input type="number" step="0.5" id="edit-product-credits">
-            </div>
-            <div class="form-group">
-                <label>Price per Day (₹):</label>
-                <input type="number" step="1" id="edit-product-price">
-            </div>
-            <div class="form-group">
-                <label>Key Type:</label>
+                <label><i class="fas fa-key"></i> Key Type:</label>
                 <select id="edit-product-keytype">
-                    <option value="fluorite">Fluorite/Gbox (16 chars alphanumeric)</option>
-                    <option value="drip">Drip (10 digits)</option>
-                    <option value="hg">HG Cheat (HG-XXXXXX)</option>
-                    <option value="brmod">BRMod (Username + Password)</option>
-                    <option value="lkteam">LKTEAM (LKTEAM-XXXXXX)</option>
-                    <option value="strict">Strict (STRICT-8 digits)</option>
-                    <option value="spotify">Spotify (Email + Password)</option>
-                    <option value="standard">Standard (KEY-XXXX-XXXX-XXXX)</option>
+                    <option value="fluorite">🔷 Fluorite/Gbox (16 chars)</option>
+                    <option value="drip">🔢 Drip (10 digits)</option>
+                    <option value="hg">⚡ HG Cheat (HG-XXXXXX)</option>
+                    <option value="brmod">👤 BRMod (User+Pass)</option>
+                    <option value="lkteam">🔑 LKTEAM (LKTEAM-XXXXXX)</option>
+                    <option value="strict">⚠️ Strict (STRICT-8 digits)</option>
+                    <option value="spotify">🎵 Spotify (Email+Pass)</option>
+                    <option value="standard">📋 Standard (KEY-XXXX-XXXX)</option>
                 </select>
             </div>
-            <button class="btn-primary" id="update-product">Update</button>
-            <button class="btn-secondary" id="close-modal">Cancel</button>
+            <div class="form-actions">
+                <button class="btn-primary" id="update-product"><i class="fas fa-save"></i> Update</button>
+                <button class="btn-secondary" id="close-modal"><i class="fas fa-times"></i> Cancel</button>
+            </div>
         </div>
     </div>
 
     <!-- Add Credits Modal -->
     <div id="add-credits-modal" class="modal" style="display: none;">
         <div class="modal-content">
-            <h3>Add Credits to User</h3>
+            <h3><i class="fas fa-plus-circle"></i> Add Credits to User</h3>
             <input type="hidden" id="add-credits-username">
             <div class="form-group">
-                <label>Credits to add:</label>
-                <input type="number" step="0.5" id="add-credits-amount" min="1" required>
+                <label><i class="fas fa-user"></i> Username:</label>
+                <p id="display-username" class="neon-text"></p>
             </div>
-            <button class="btn-primary" id="confirm-add-credits">Add Credits</button>
-            <button class="btn-secondary" id="close-credits-modal">Cancel</button>
+            <div class="form-group">
+                <label><i class="fas fa-coins"></i> Credits to Add:</label>
+                <input type="number" step="0.5" id="add-credits-amount" min="1" placeholder="Enter credits" required>
+            </div>
+            <div class="form-actions">
+                <button class="btn-primary" id="confirm-add-credits"><i class="fas fa-check"></i> Add Credits</button>
+                <button class="btn-secondary" id="close-credits-modal"><i class="fas fa-times"></i> Cancel</button>
+            </div>
         </div>
     </div>
+
+    <style>
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        .support-links-bar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            justify-content: center;
+        }
+        
+        .btn-whatsapp-support, .btn-telegram-support {
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            color: white;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-whatsapp-support {
+            background: #25D366;
+        }
+        
+        .btn-telegram-support {
+            background: #0088cc;
+        }
+        
+        .btn-whatsapp-support:hover, .btn-telegram-support:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+        
+        .btn-icon {
+            padding: 0.5rem;
+            border-radius: 50%;
+            color: white;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-icon.whatsapp-icon {
+            background: #25D366;
+        }
+        
+        .btn-icon.telegram-icon {
+            background: #0088cc;
+        }
+        
+        .btn-icon:hover {
+            transform: scale(1.2);
+        }
+        
+        .payment-row.status-pending {
+            background: rgba(255, 170, 0, 0.1);
+            border-left: 4px solid var(--accent-yellow);
+        }
+        
+        .payment-row.status-approved {
+            background: rgba(0, 255, 0, 0.05);
+            border-left: 4px solid var(--accent-green);
+        }
+        
+        .payment-row.status-rejected {
+            background: rgba(255, 68, 68, 0.05);
+            border-left: 4px solid var(--accent-red);
+        }
+        
+        .utr-cell {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        
+        .approved-by {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            background: rgba(0,0,0,0.3);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+        
+        .btn-warning {
+            background: var(--accent-yellow);
+            color: black;
+        }
+        
+        .btn-warning:hover {
+            background: #ff9900;
+        }
+        
+        .btn-success {
+            background: var(--accent-green);
+            color: black;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: linear-gradient(145deg, #1a1a1a, #000);
+            padding: 1.5rem;
+            border-radius: 15px;
+            border: 2px solid var(--accent-pink);
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 30px rgba(255,0,255,0.3);
+        }
+        
+        .stat-card i {
+            font-size: 2rem;
+            color: var(--accent-pink);
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-card h3 {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 1.8rem;
+            color: var(--accent-green);
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0,255,0,0.5);
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .support-links-bar {
+                flex-direction: column;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
+            
+            .stat-card .stat-value {
+                font-size: 1.4rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
