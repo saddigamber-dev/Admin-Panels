@@ -65,7 +65,7 @@
                             <tr>
                                 <th>Username</th>
                                 <th>UTR</th>
-                                <th>Amount</th>
+                                <th>Amount (₹)</th>
                                 <th>Date</th>
                                 <th>Status</th>
                                 <th>Action</th>
@@ -76,7 +76,7 @@
                             <tr>
                                 <td>{{ payment[1] }}</td>
                                 <td>{{ payment[2] }}</td>
-                                <td>{{ payment[3] }}</td>
+                                <td>₹{{ payment[3] }}</td>
                                 <td>{{ payment[5] }}</td>
                                 <td><span class="status-badge status-{{ payment[4] }}">{{ payment[4] }}</span></td>
                                 <td>
@@ -100,21 +100,25 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Key</th>
+                                <th>Key/Credentials</th>
                                 <th>Username</th>
                                 <th>Product</th>
                                 <th>Expiry Date</th>
                                 <th>Status</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for license in licenses %}
                             <tr>
-                                <td>{{ license[1] }}</td>
+                                <td class="key-cell">{{ license[1] }}</td>
                                 <td>{{ license[2] }}</td>
                                 <td>{{ license[3] }}</td>
-                                <td>{{ license[4] }}</td>
-                                <td><span class="status-badge status-{{ license[5] }}">{{ license[5] }}</span></td>
+                                <td>{{ license[5] }}</td>
+                                <td><span class="status-badge status-{{ license[6] }}">{{ license[6] }}</span></td>
+                                <td>
+                                    <button class="btn-small btn-danger btn-delete-key" data-license-id="{{ license[0] }}">Delete</button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -140,17 +144,31 @@
                         <input type="number" id="new-product-cost" required>
                     </div>
                     <div class="form-group">
-                        <label>Duration:</label>
-                        <select id="new-product-duration">
-                            <option value="1 day">1 day</option>
-                            <option value="7 days">7 days</option>
-                            <option value="15 days">15 days</option>
-                            <option value="30 days">30 days</option>
+                        <label>Duration (Days):</label>
+                        <select id="new-product-days">
+                            <option value="1">1 day</option>
+                            <option value="7">7 days</option>
+                            <option value="15">15 days</option>
+                            <option value="30">30 days</option>
+                            <option value="60">60 days</option>
+                            <option value="90">90 days</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Price ($):</label>
-                        <input type="number" step="0.01" id="new-product-price" required>
+                        <label>Price (₹):</label>
+                        <input type="number" step="1" id="new-product-price" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Key Type:</label>
+                        <select id="new-product-keytype">
+                            <option value="standard">Standard (KEY-XXXX-XXXX-XXXX)</option>
+                            <option value="fluorite">Fluorite (16 chars alphanumeric)</option>
+                            <option value="drip">Drip (10 digits)</option>
+                            <option value="hg">HG Cheat (HG-XXXXXX)</option>
+                            <option value="brmod">BRMod (Username + Password)</option>
+                            <option value="lkteam">LKTEAM (LKTEAM-XXXXXX)</option>
+                            <option value="spotify">Spotify (Email + Password)</option>
+                        </select>
                     </div>
                     <button class="btn-primary" id="save-product">Save Product</button>
                     <button class="btn-secondary" id="cancel-product">Cancel</button>
@@ -162,8 +180,9 @@
                             <tr>
                                 <th>Product Name</th>
                                 <th>Credit Cost</th>
-                                <th>Duration</th>
-                                <th>Price ($)</th>
+                                <th>Days</th>
+                                <th>Price (₹)</th>
+                                <th>Key Type</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -172,8 +191,9 @@
                             <tr>
                                 <td>{{ product[1] }}</td>
                                 <td>{{ product[2] }}</td>
-                                <td>{{ product[3] }}</td>
-                                <td>${{ product[4] }}</td>
+                                <td>{{ product[3] }} days</td>
+                                <td>₹{{ product[4] }}</td>
+                                <td>{{ product[5] }}</td>
                                 <td>
                                     <button class="btn-small btn-edit-product" data-product-id="{{ product[0] }}">Edit</button>
                                     <button class="btn-small btn-danger btn-delete-product" data-product-id="{{ product[0] }}">Delete</button>
@@ -201,17 +221,31 @@
                 <input type="number" id="edit-product-cost">
             </div>
             <div class="form-group">
-                <label>Duration:</label>
-                <select id="edit-product-duration">
-                    <option value="1 day">1 day</option>
-                    <option value="7 days">7 days</option>
-                    <option value="15 days">15 days</option>
-                    <option value="30 days">30 days</option>
+                <label>Duration (Days):</label>
+                <select id="edit-product-days">
+                    <option value="1">1 day</option>
+                    <option value="7">7 days</option>
+                    <option value="15">15 days</option>
+                    <option value="30">30 days</option>
+                    <option value="60">60 days</option>
+                    <option value="90">90 days</option>
                 </select>
             </div>
             <div class="form-group">
-                <label>Price ($):</label>
-                <input type="number" step="0.01" id="edit-product-price">
+                <label>Price (₹):</label>
+                <input type="number" step="1" id="edit-product-price">
+            </div>
+            <div class="form-group">
+                <label>Key Type:</label>
+                <select id="edit-product-keytype">
+                    <option value="standard">Standard (KEY-XXXX-XXXX-XXXX)</option>
+                    <option value="fluorite">Fluorite (16 chars alphanumeric)</option>
+                    <option value="drip">Drip (10 digits)</option>
+                    <option value="hg">HG Cheat (HG-XXXXXX)</option>
+                    <option value="brmod">BRMod (Username + Password)</option>
+                    <option value="lkteam">LKTEAM (LKTEAM-XXXXXX)</option>
+                    <option value="spotify">Spotify (Email + Password)</option>
+                </select>
             </div>
             <button class="btn-primary" id="update-product">Update</button>
             <button class="btn-secondary" id="close-modal">Cancel</button>
