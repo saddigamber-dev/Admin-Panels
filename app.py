@@ -96,26 +96,26 @@ def init_db():
         
         # Insert default products
         default_products = [
-            ('Fluorite FF IOS', 10, 20, 'fluorite'),
-            ('Drip Android ApkMod', 5, 10, 'drip'),
-            ('Drip Aimkill PC', 6, 12, 'drip'),
-            ('Drip SilentAim PC', 8, 15, 'drip'),
-            ('Gbox IOS Signer', 12, 25, 'gbox'),
+            ('Fluorite FF IOS', 25, 50, 'fluorite'),
+            ('Drip Android ApkMod', 6, 12, 'drip'),
+            ('Drip Aimkill PC', 12, 25, 'drip'),
+            ('Drip SilentAim PC', 10, 20, 'drip'),
+            ('Gbox IOS Signer', 18, 36, 'gbox'),
             ('Hg Cheat ApkMod', 7, 14, 'hg'),
-            ('Prime Apkmod', 9, 18, 'standard'),
+            ('Prime Apkmod', 5, 10, 'standard'),
             ('GlitchShotx 8BP IOS', 15, 30, 'gbox'),
             ('Brmod SilentAim PC', 10, 20, 'brmod'),
-            ('Brmod Bypass + Silent', 12, 25, 'brmod'),
+            ('Brmod Bypass + Silent', 8, 16, 'brmod'),
             ('Gbox Esign Cert', 20, 40, 'gbox'),
             ('Pato Blue ApkMod', 5, 10, 'standard'),
             ('Drip Root Android', 8, 16, 'drip'),
             ('LKTEAM Root + PC', 12, 25, 'lkteam'),
             ('Pato Orange ApkMod', 7, 14, 'standard'),
-            ('Pato Green ApkMod', 8, 16, 'standard'),
-            ('Strict Br Root', 10, 20, 'strict'),
+            ('Pato Green ApkMod', 5, 10, 'standard'),
+            ('Strics Br Root', 10, 20, 'strict'),
             ('Shield Pubg Android', 9, 18, 'standard'),
             ('Haxxcker Pro Root', 12, 25, 'standard'),
-            ('Spotify Root', 4, 8, 'spotify')
+            ('Spotify Root', 5, 10, 'spotify')
         ]
         
         for product in default_products:
