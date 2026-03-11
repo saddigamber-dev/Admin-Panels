@@ -1,1 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Neon Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <img src="https://i.ibb.co/1GBn25c5/VID-20260310-172522-610-ezgif-com-video-to-gif-converter.gif" alt="Logo" class="nav-logo">
+            <div class="nav-user">Admin: {{ session.username }}</div>
+            <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+        </div>
+    </nav>
 
+    <div class="container">
+        <div class="dashboard-tabs">
+            <button class="tab-btn active" data-tab="users">Users</button>
+            <button class="tab-btn" data-tab="payments">Payments</button>
+            <button class="tab-btn" data-tab="licenses">Licenses</button>
+            <button class="tab-btn" data-tab="products">Products</button>
+        </div>
+
+        <!-- Users Tab -->
+        <div id="users-tab" class="tab-content active">
+            <div class="card">
+                <h2>Manage Users</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Credits</th>
+                                <th>Role</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                            <tr>
+                                <td>{{ user[1] }}</td>
+                                <td>{{ user[4] }}</td>
+                                <td>{{ user[3] }}</td>
+                                <td>
+                                    <button class="btn-small btn-add-credits" data-username="{{ user[1] }}">Add Credits</button>
+                                    <button class="btn-small btn-danger btn-delete-user" data-username="{{ user[1] }}">Delete</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payments Tab -->
+        <div id="payments-tab" class="tab-content">
+            <div class="card">
+                <h2>Payment Requests</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>UTR</th>
+                                <th>Amount</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for payment in payments %}
+                            <tr>
+                                <td>{{ payment[1] }}</td>
+                                <td>{{ payment[2] }}</td>
+                                <td>{{ payment[3] }}</td>
+                                <td>{{ payment[5] }}</td>
+                                <td><span class="status-badge status-{{ payment[4] }}">{{ payment[4] }}</span></td>
+                                <td>
+                                    {% if payment[4] == 'pending' %}
+                                    <button class="btn-small btn-approve-payment" data-payment-id="{{ payment[0] }}">Approve</button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Licenses Tab -->
+        <div id="licenses-tab" class="tab-content">
+            <div class="card">
+                <h2>All Generated Keys</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Key</th>
+                                <th>Username</th>
+                                <th>Product</th>
+                                <th>Expiry Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for license in licenses %}
+                            <tr>
+                                <td>{{ license[1] }}</td>
+                                <td>{{ license[2] }}</td>
+                                <td>{{ license[3] }}</td>
+                                <td>{{ license[4] }}</td>
+                                <td><span class="status-badge status-{{ license[5] }}">{{ license[5] }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Products Tab -->
+        <div id="products-tab" class="tab-content">
+            <div class="card">
+                <h2>Manage Products</h2>
+                <button class="btn-primary" id="add-product-btn">Add New Product</button>
+                
+                <div id="add-product-form" style="display: none;" class="form-container">
+                    <h3>Add New Product</h3>
+                    <div class="form-group">
+                        <label>Product Name:</label>
+                        <input type="text" id="new-product-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Credit Cost:</label>
+                        <input type="number" id="new-product-cost" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Duration:</label>
+                        <select id="new-product-duration">
+                            <option value="1 day">1 day</option>
+                            <option value="7 days">7 days</option>
+                            <option value="15 days">15 days</option>
+                            <option value="30 days">30 days</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Price ($):</label>
+                        <input type="number" step="0.01" id="new-product-price" required>
+                    </div>
+                    <button class="btn-primary" id="save-product">Save Product</button>
+                    <button class="btn-secondary" id="cancel-product">Cancel</button>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Product Name</th>
+                                <th>Credit Cost</th>
+                                <th>Duration</th>
+                                <th>Price ($)</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in products %}
+                            <tr>
+                                <td>{{ product[1] }}</td>
+                                <td>{{ product[2] }}</td>
+                                <td>{{ product[3] }}</td>
+                                <td>${{ product[4] }}</td>
+                                <td>
+                                    <button class="btn-small btn-edit-product" data-product-id="{{ product[0] }}">Edit</button>
+                                    <button class="btn-small btn-danger btn-delete-product" data-product-id="{{ product[0] }}">Delete</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Product Modal -->
+    <div id="edit-product-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>Edit Product</h3>
+            <input type="hidden" id="edit-product-id">
+            <div class="form-group">
+                <label>Product Name:</label>
+                <input type="text" id="edit-product-name">
+            </div>
+            <div class="form-group">
+                <label>Credit Cost:</label>
+                <input type="number" id="edit-product-cost">
+            </div>
+            <div class="form-group">
+                <label>Duration:</label>
+                <select id="edit-product-duration">
+                    <option value="1 day">1 day</option>
+                    <option value="7 days">7 days</option>
+                    <option value="15 days">15 days</option>
+                    <option value="30 days">30 days</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Price ($):</label>
+                <input type="number" step="0.01" id="edit-product-price">
+            </div>
+            <button class="btn-primary" id="update-product">Update</button>
+            <button class="btn-secondary" id="close-modal">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Add Credits Modal -->
+    <div id="add-credits-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>Add Credits to User</h3>
+            <input type="hidden" id="add-credits-username">
+            <div class="form-group">
+                <label>Credits to add:</label>
+                <input type="number" id="add-credits-amount" min="1" required>
+            </div>
+            <button class="btn-primary" id="confirm-add-credits">Add Credits</button>
+            <button class="btn-secondary" id="close-credits-modal">Cancel</button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
