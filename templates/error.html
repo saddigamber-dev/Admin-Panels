@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error - Neon Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="auth-body">
+    <div class="auth-container">
+        <img src="https://i.ibb.co/1GBn25c5/VID-20260310-172522-610-ezgif-com-video-to-gif-converter.gif" alt="Logo" class="logo">
+        
+        <div class="error-message" style="text-align: center;">
+            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+            <h2 style="color: white;">Oops! Something went wrong</h2>
+            <p style="color: white; margin: 1rem 0;">{{ error }}</p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 2rem;">
+            <a href="{{ url_for('index') }}" class="btn-primary">
+                <i class="fas fa-home"></i> Go to Home
+            </a>
+        </div>
+        
+        <div class="support-section" style="margin-top: 2rem;">
+            <h3><i class="fas fa-headset"></i> Need Help?</h3>
+            <div class="support-grid" style="grid-template-columns: 1fr;">
+                <a href="{{ whatsapp_link }}" target="_blank" class="support-card whatsapp">
+                    <i class="fab fa-whatsapp"></i>
+                    <span>WhatsApp Support</span>
+                </a>
+                <a href="{{ telegram_channel }}" target="_blank" class="support-card telegram">
+                    <i class="fab fa-telegram"></i>
+                    <span>Telegram Channel</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
