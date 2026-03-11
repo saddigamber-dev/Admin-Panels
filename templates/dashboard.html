@@ -1,1 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - Neon Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <img src="https://i.ibb.co/1GBn25c5/VID-20260310-172522-610-ezgif-com-video-to-gif-converter.gif" alt="Logo" class="nav-logo">
+            <div class="nav-credits">Credits: {{ user[4] }}</div>
+            <div class="nav-user">{{ user[1] }}</div>
+            <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+        </div>
+    </nav>
 
+    <div class="container">
+        <div class="dashboard-grid">
+            <!-- Credits Section -->
+            <div class="card">
+                <h2>Your Credits</h2>
+                <div class="credits-display">{{ user[4] }}</div>
+                <a href="{{ url_for('payment') }}" class="btn-primary">Recharge Credits</a>
+            </div>
+
+            <!-- Generate Key Section -->
+            <div class="card">
+                <h2>Generate New Key</h2>
+                <div class="form-group">
+                    <label for="product-select">Select Product:</label>
+                    <select id="product-select" class="product-dropdown">
+                        <option value="">Choose a product...</option>
+                        {% for product in products %}
+                        <option value="{{ product[0] }}" data-cost="{{ product[2] }}" data-duration="{{ product[3] }}">
+                            {{ product[1] }} - {{ product[2] }} credits ({{ product[3] }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div id="product-details" class="product-details" style="display: none;">
+                    <p>Cost: <span id="product-cost"></span> credits</p>
+                    <p>Duration: <span id="product-duration"></span></p>
+                    <button id="generate-key" class="btn-primary" disabled>Generate Key</button>
+                </div>
+                
+                <div id="generated-key" class="generated-key" style="display: none;">
+                    <h3>Your Generated Key:</h3>
+                    <div class="key-display"></div>
+                </div>
+            </div>
+
+            <!-- Your Keys Section -->
+            <div class="card full-width">
+                <h2>Your Generated Keys</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Key</th>
+                                <th>Product</th>
+                                <th>Expiry Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for license in licenses %}
+                            <tr>
+                                <td>{{ license[1] }}</td>
+                                <td>{{ license[3] }}</td>
+                                <td>{{ license[4] }}</td>
+                                <td><span class="status-badge status-{{ license[5] }}">{{ license[5] }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
