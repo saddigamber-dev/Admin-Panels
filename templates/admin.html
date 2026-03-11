@@ -11,8 +11,10 @@
     <nav class="navbar">
         <div class="nav-container">
             <img src="https://i.ibb.co/1GBn25c5/VID-20260310-172522-610-ezgif-com-video-to-gif-converter.gif" alt="Logo" class="nav-logo">
-            <div class="nav-user">Admin: {{ session.username }}</div>
-            <a href="{{ url_for('logout') }}" class="btn-logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            <div class="nav-user">👑 Admin: {{ session.username }}</div>
+            <a href="{{ url_for('logout') }}" class="btn-logout">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
         </div>
     </nav>
 
@@ -20,44 +22,50 @@
         <!-- Stats Cards -->
         <div class="stats-grid">
             <div class="stat-card">
-                <i class="fas fa-users"></i>
-                <h3>Total Users</h3>
+                <h3><i class="fas fa-users"></i> Total Users</h3>
                 <div class="stat-value">{{ total_users }}</div>
             </div>
             <div class="stat-card">
-                <i class="fas fa-rupee-sign"></i>
-                <h3>Total Revenue</h3>
+                <h3><i class="fas fa-rupee-sign"></i> Total Revenue</h3>
                 <div class="stat-value">₹{{ total_revenue }}</div>
             </div>
             <div class="stat-card">
-                <i class="fas fa-coins"></i>
-                <h3>Credits Sold</h3>
+                <h3><i class="fas fa-coins"></i> Credits Sold</h3>
                 <div class="stat-value">{{ total_credits_sold }}</div>
             </div>
             <div class="stat-card">
-                <i class="fas fa-clock"></i>
-                <h3>Pending Payments</h3>
+                <h3><i class="fas fa-clock"></i> Pending</h3>
                 <div class="stat-value">{{ pending_payments }}</div>
             </div>
             <div class="stat-card">
-                <i class="fas fa-key"></i>
-                <h3>Active Keys</h3>
+                <h3><i class="fas fa-key"></i> Active Keys</h3>
                 <div class="stat-value">{{ active_keys }}</div>
             </div>
         </div>
 
         <!-- Dashboard Tabs -->
         <div class="dashboard-tabs">
-            <button class="tab-btn active" data-tab="users"><i class="fas fa-users"></i> Users</button>
-            <button class="tab-btn" data-tab="payments"><i class="fas fa-credit-card"></i> Payments</button>
-            <button class="tab-btn" data-tab="licenses"><i class="fas fa-key"></i> Licenses</button>
-            <button class="tab-btn" data-tab="products"><i class="fas fa-box"></i> Products</button>
+            <button class="tab-btn active" data-tab="users">
+                <i class="fas fa-users"></i> Users
+            </button>
+            <button class="tab-btn" data-tab="payments">
+                <i class="fas fa-credit-card"></i> Payments
+                {% if pending_payments > 0 %}
+                <span class="badge">{{ pending_payments }}</span>
+                {% endif %}
+            </button>
+            <button class="tab-btn" data-tab="licenses">
+                <i class="fas fa-key"></i> Licenses
+            </button>
+            <button class="tab-btn" data-tab="products">
+                <i class="fas fa-box"></i> Products
+            </button>
         </div>
 
-        <!-- Users Tab -->
+        <!-- USERS TAB -->
         <div id="users-tab" class="tab-content active">
             <div class="card">
-                <h2><i class="fas fa-users"></i> Manage Users</h2>
+                <h2><i class="fas fa-user-cog"></i> Manage Users</h2>
                 <div class="table-container">
                     <table>
                         <thead>
@@ -72,8 +80,15 @@
                         <tbody>
                             {% for user in users %}
                             <tr>
-                                <td><i class="fas fa-user"></i> {{ user[1] }}</td>
-                                <td class="neon-text-green">{{ user[4] }}</td>
+                                <td>
+                                    <i class="fas fa-user-circle"></i> 
+                                    <strong>{{ user[1] }}</strong>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-active">
+                                        <i class="fas fa-coins"></i> {{ user[4] }}
+                                    </span>
+                                </td>
                                 <td>₹{{ user[5] or 0 }}</td>
                                 <td>{{ user[6][:10] if user[6] else 'N/A' }}</td>
                                 <td>
@@ -83,6 +98,9 @@
                                     <button class="btn-small btn-danger btn-delete-user" data-username="{{ user[1] }}">
                                         <i class="fas fa-trash"></i> Delete
                                     </button>
+                                    <a href="{{ whatsapp_link }}" target="_blank" class="btn-small btn-whatsapp-small">
+                                        <i class="fab fa-whatsapp"></i> Chat
+                                    </a>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -92,39 +110,38 @@
             </div>
         </div>
 
-        <!-- Payments Tab -->
+        <!-- PAYMENTS TAB -->
         <div id="payments-tab" class="tab-content">
             <div class="card">
                 <h2><i class="fas fa-credit-card"></i> Payment Requests</h2>
-                <div class="support-links-bar">
-                    <a href="{{ whatsapp_link }}" target="_blank" class="btn-whatsapp-support">
-                        <i class="fab fa-whatsapp"></i> WhatsApp Support
-                    </a>
-                    <a href="{{ telegram_channel }}" target="_blank" class="btn-telegram-support">
-                        <i class="fab fa-telegram"></i> Telegram Channel
-                    </a>
-                </div>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
-                                <th>Username</th>
+                                <th>User</th>
                                 <th>UTR</th>
-                                <th>Amount (₹)</th>
+                                <th>Amount</th>
                                 <th>Credits</th>
                                 <th>Date</th>
                                 <th>Status</th>
                                 <th>Actions</th>
-                                <th>Support</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for payment in payments %}
-                            <tr class="payment-row status-{{ payment[5] }}">
-                                <td><i class="fas fa-user"></i> {{ payment[1] }}</td>
-                                <td class="utr-cell">{{ payment[2] }}</td>
-                                <td class="neon-text">₹{{ payment[3] }}</td>
-                                <td class="neon-text-green">{{ payment[4] }}</td>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-user"></i> {{ payment[1] }}
+                                </td>
+                                <td>
+                                    <code>{{ payment[2] }}</code>
+                                </td>
+                                <td>
+                                    <strong>₹{{ payment[3] }}</strong>
+                                </td>
+                                <td>
+                                    <span class="neon-text-green">{{ payment[4] }}</span>
+                                </td>
                                 <td>{{ payment[6][:16] }}</td>
                                 <td>
                                     <span class="status-badge status-{{ payment[5] }}">
@@ -134,21 +151,14 @@
                                 <td>
                                     {% if payment[5] == 'pending' %}
                                     <button class="btn-small btn-approve-payment" data-payment-id="{{ payment[0] }}">
-                                        <i class="fas fa-check"></i> Approve
+                                        <i class="fas fa-check-circle"></i> Approve
                                     </button>
                                     <button class="btn-small btn-danger btn-reject-payment" data-payment-id="{{ payment[0] }}">
-                                        <i class="fas fa-times"></i> Reject
+                                        <i class="fas fa-times-circle"></i> Reject
                                     </button>
-                                    {% elif payment[5] == 'approved' %}
-                                    <span class="approved-by">By: {{ payment[8] or 'Admin' }}</span>
                                     {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{{ whatsapp_link }}" target="_blank" class="btn-icon whatsapp-icon" title="WhatsApp">
+                                    <a href="{{ whatsapp_link }}" target="_blank" class="btn-small btn-whatsapp-small">
                                         <i class="fab fa-whatsapp"></i>
-                                    </a>
-                                    <a href="{{ telegram_channel }}" target="_blank" class="btn-icon telegram-icon" title="Telegram">
-                                        <i class="fab fa-telegram"></i>
                                     </a>
                                 </td>
                             </tr>
@@ -159,7 +169,7 @@
             </div>
         </div>
 
-        <!-- Licenses Tab -->
+        <!-- LICENSES TAB -->
         <div id="licenses-tab" class="tab-content">
             <div class="card">
                 <h2><i class="fas fa-key"></i> All Generated Keys</h2>
@@ -168,7 +178,7 @@
                         <thead>
                             <tr>
                                 <th>Key/Credentials</th>
-                                <th>Username</th>
+                                <th>User</th>
                                 <th>Product</th>
                                 <th>Days</th>
                                 <th>Credits</th>
@@ -181,12 +191,16 @@
                             {% for license in licenses %}
                             <tr>
                                 <td class="key-cell">{{ license[1] }}</td>
-                                <td><i class="fas fa-user"></i> {{ license[2] }}</td>
+                                <td>{{ license[2] }}</td>
                                 <td>{{ license[3] }}</td>
-                                <td>{{ license[4] }}d</td>
+                                <td>{{ license[4] }} days</td>
                                 <td>{{ license[5] }}</td>
-                                <td>{{ license[6][:10] }}</td>
-                                <td><span class="status-badge status-{{ license[7] }}">{{ license[7] }}</span></td>
+                                <td>{{ license[6][:16] }}</td>
+                                <td>
+                                    <span class="status-badge status-{{ license[7] }}">
+                                        {{ license[7] }}
+                                    </span>
+                                </td>
                                 <td>
                                     <button class="btn-small btn-danger btn-delete-key" data-license-id="{{ license[0] }}">
                                         <i class="fas fa-trash"></i> Delete
@@ -200,49 +214,59 @@
             </div>
         </div>
 
-        <!-- Products Tab -->
+        <!-- PRODUCTS TAB -->
         <div id="products-tab" class="tab-content">
             <div class="card">
                 <h2><i class="fas fa-box"></i> Manage Products</h2>
+                
                 <button class="btn-primary" id="add-product-btn">
-                    <i class="fas fa-plus"></i> Add New Product
+                    <i class="fas fa-plus-circle"></i> Add New Product
                 </button>
                 
+                <!-- Add Product Form -->
                 <div id="add-product-form" style="display: none;" class="form-container">
-                    <h3><i class="fas fa-plus-circle"></i> Add New Product</h3>
+                    <h3><i class="fas fa-plus"></i> Add New Product</h3>
+                    
                     <div class="form-group">
                         <label><i class="fas fa-tag"></i> Product Name:</label>
                         <input type="text" id="new-product-name" placeholder="Enter product name" required>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label><i class="fas fa-coins"></i> Credits/Day:</label>
-                            <input type="number" step="0.5" id="new-product-credits" placeholder="10" required>
-                        </div>
-                        <div class="form-group">
-                            <label><i class="fas fa-rupee-sign"></i> Price/Day:</label>
-                            <input type="number" step="1" id="new-product-price" placeholder="20" required>
-                        </div>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-coins"></i> Credits per Day:</label>
+                        <input type="number" step="0.5" id="new-product-credits" placeholder="e.g., 10" required>
                     </div>
+                    
+                    <div class="form-group">
+                        <label><i class="fas fa-rupee-sign"></i> Price per Day (₹):</label>
+                        <input type="number" step="1" id="new-product-price" placeholder="e.g., 20" required>
+                    </div>
+                    
                     <div class="form-group">
                         <label><i class="fas fa-key"></i> Key Type:</label>
                         <select id="new-product-keytype">
-                            <option value="fluorite">🔷 Fluorite/Gbox (16 chars)</option>
+                            <option value="fluorite">🔑 Fluorite/Gbox (16 chars)</option>
                             <option value="drip">🔢 Drip (10 digits)</option>
-                            <option value="hg">⚡ HG Cheat (HG-XXXXXX)</option>
-                            <option value="brmod">👤 BRMod (User+Pass)</option>
-                            <option value="lkteam">🔑 LKTEAM (LKTEAM-XXXXXX)</option>
-                            <option value="strict">⚠️ Strict (STRICT-8 digits)</option>
-                            <option value="spotify">🎵 Spotify (Email+Pass)</option>
-                            <option value="standard">📋 Standard (KEY-XXXX-XXXX)</option>
+                            <option value="hg">🎯 HG Cheat (HG-XXXXXX)</option>
+                            <option value="brmod">👥 BRMod (Username+Password)</option>
+                            <option value="lkteam">⚡ LKTEAM (LKTEAM-XXXXXX)</option>
+                            <option value="strict">🔒 Strict (STRICT-8 digits)</option>
+                            <option value="spotify">🎵 Spotify (Email+Password)</option>
+                            <option value="standard">📦 Standard (KEY-XXXX-XXXX)</option>
                         </select>
                     </div>
-                    <div class="form-actions">
-                        <button class="btn-primary" id="save-product"><i class="fas fa-save"></i> Save Product</button>
-                        <button class="btn-secondary" id="cancel-product"><i class="fas fa-times"></i> Cancel</button>
+                    
+                    <div class="flex gap-2">
+                        <button class="btn-primary" id="save-product">
+                            <i class="fas fa-save"></i> Save Product
+                        </button>
+                        <button class="btn-secondary" id="cancel-product">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
                     </div>
                 </div>
 
+                <!-- Products Table -->
                 <div class="table-container">
                     <table>
                         <thead>
@@ -258,10 +282,16 @@
                         <tbody>
                             {% for product in products %}
                             <tr>
-                                <td>{{ product[1] }}</td>
-                                <td class="neon-text-green">{{ product[2] }}</td>
-                                <td class="neon-text">₹{{ product[3] }}</td>
-                                <td><span class="key-type-badge">{{ product[4] }}</span></td>
+                                <td>
+                                    <strong>{{ product[1] }}</strong>
+                                </td>
+                                <td>
+                                    <span class="neon-text-green">{{ product[2] }}</span>
+                                </td>
+                                <td>₹{{ product[3] }}</td>
+                                <td>
+                                    <span class="key-type-badge">{{ product[4] }}</span>
+                                </td>
                                 <td>
                                     <span class="status-badge status-{{ 'active' if product[5] else 'inactive' }}">
                                         {{ 'Active' if product[5] else 'Inactive' }}
@@ -271,13 +301,12 @@
                                     <button class="btn-small btn-edit-product" data-product-id="{{ product[0] }}">
                                         <i class="fas fa-edit"></i> Edit
                                     </button>
-                                    <button class="btn-small {% if product[5] %}btn-warning{% else %}btn-success{% endif %} btn-toggle-product" 
-                                            data-product-id="{{ product[0] }}" data-active="{{ product[5] }}">
-                                        <i class="fas {% if product[5] %}fa-eye-slash{% else %}fa-eye{% endif %}"></i>
-                                        {{ 'Disable' if product[5] else 'Enable' }}
-                                    </button>
                                     <button class="btn-small btn-danger btn-delete-product" data-product-id="{{ product[0] }}">
                                         <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                    <button class="btn-small btn-toggle-product" data-product-id="{{ product[0] }}" data-active="{{ product[5] }}">
+                                        <i class="fas fa-{{ 'eye-slash' if product[5] else 'eye' }}"></i>
+                                        {{ 'Disable' if product[5] else 'Enable' }}
                                     </button>
                                 </td>
                             </tr>
@@ -289,244 +318,468 @@
         </div>
     </div>
 
-    <!-- Edit Product Modal -->
+    <!-- EDIT PRODUCT MODAL -->
     <div id="edit-product-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <h3><i class="fas fa-edit"></i> Edit Product</h3>
+            
             <input type="hidden" id="edit-product-id">
+            
             <div class="form-group">
                 <label><i class="fas fa-tag"></i> Product Name:</label>
                 <input type="text" id="edit-product-name" required>
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label><i class="fas fa-coins"></i> Credits/Day:</label>
-                    <input type="number" step="0.5" id="edit-product-credits" required>
-                </div>
-                <div class="form-group">
-                    <label><i class="fas fa-rupee-sign"></i> Price/Day:</label>
-                    <input type="number" step="1" id="edit-product-price" required>
-                </div>
+            
+            <div class="form-group">
+                <label><i class="fas fa-coins"></i> Credits per Day:</label>
+                <input type="number" step="0.5" id="edit-product-credits" required>
             </div>
+            
+            <div class="form-group">
+                <label><i class="fas fa-rupee-sign"></i> Price per Day (₹):</label>
+                <input type="number" step="1" id="edit-product-price" required>
+            </div>
+            
             <div class="form-group">
                 <label><i class="fas fa-key"></i> Key Type:</label>
                 <select id="edit-product-keytype">
-                    <option value="fluorite">🔷 Fluorite/Gbox (16 chars)</option>
+                    <option value="fluorite">🔑 Fluorite/Gbox (16 chars)</option>
                     <option value="drip">🔢 Drip (10 digits)</option>
-                    <option value="hg">⚡ HG Cheat (HG-XXXXXX)</option>
-                    <option value="brmod">👤 BRMod (User+Pass)</option>
-                    <option value="lkteam">🔑 LKTEAM (LKTEAM-XXXXXX)</option>
-                    <option value="strict">⚠️ Strict (STRICT-8 digits)</option>
-                    <option value="spotify">🎵 Spotify (Email+Pass)</option>
-                    <option value="standard">📋 Standard (KEY-XXXX-XXXX)</option>
+                    <option value="hg">🎯 HG Cheat (HG-XXXXXX)</option>
+                    <option value="brmod">👥 BRMod (Username+Password)</option>
+                    <option value="lkteam">⚡ LKTEAM (LKTEAM-XXXXXX)</option>
+                    <option value="strict">🔒 Strict (STRICT-8 digits)</option>
+                    <option value="spotify">🎵 Spotify (Email+Password)</option>
+                    <option value="standard">📦 Standard (KEY-XXXX-XXXX)</option>
                 </select>
             </div>
-            <div class="form-actions">
-                <button class="btn-primary" id="update-product"><i class="fas fa-save"></i> Update</button>
-                <button class="btn-secondary" id="close-modal"><i class="fas fa-times"></i> Cancel</button>
+            
+            <div class="flex gap-2">
+                <button class="btn-primary" id="update-product">
+                    <i class="fas fa-save"></i> Update
+                </button>
+                <button class="btn-secondary" id="close-modal">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Add Credits Modal -->
+    <!-- ADD CREDITS MODAL -->
     <div id="add-credits-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <h3><i class="fas fa-plus-circle"></i> Add Credits to User</h3>
+            
             <input type="hidden" id="add-credits-username">
-            <div class="form-group">
-                <label><i class="fas fa-user"></i> Username:</label>
-                <p id="display-username" class="neon-text"></p>
-            </div>
+            
             <div class="form-group">
                 <label><i class="fas fa-coins"></i> Credits to Add:</label>
                 <input type="number" step="0.5" id="add-credits-amount" min="1" placeholder="Enter credits" required>
             </div>
-            <div class="form-actions">
-                <button class="btn-primary" id="confirm-add-credits"><i class="fas fa-check"></i> Add Credits</button>
-                <button class="btn-secondary" id="close-credits-modal"><i class="fas fa-times"></i> Cancel</button>
+            
+            <div class="flex gap-2">
+                <button class="btn-primary" id="confirm-add-credits">
+                    <i class="fas fa-check"></i> Add Credits
+                </button>
+                <button class="btn-secondary" id="close-credits-modal">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
             </div>
         </div>
     </div>
 
+    <!-- SUPPORT SECTION -->
+    <div class="support-section" style="margin-top: 2rem;">
+        <h3><i class="fas fa-headset"></i> Quick Support</h3>
+        <div class="support-grid">
+            <a href="{{ whatsapp_link }}" target="_blank" class="support-card whatsapp">
+                <i class="fab fa-whatsapp"></i>
+                <span>WhatsApp Support</span>
+                <small>Click to chat with admin</small>
+            </a>
+            <a href="{{ telegram_channel }}" target="_blank" class="support-card telegram">
+                <i class="fab fa-telegram"></i>
+                <span>Telegram Channel</span>
+                <small>Join for updates</small>
+            </a>
+        </div>
+    </div>
+
     <style>
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-        }
-        
-        .form-actions {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-        
-        .support-links-bar {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            padding: 1rem;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 10px;
-            justify-content: center;
-        }
-        
-        .btn-whatsapp-support, .btn-telegram-support {
-            padding: 0.8rem 1.5rem;
-            border-radius: 8px;
-            text-decoration: none;
+        /* Additional inline styles for badges */
+        .badge {
+            background: var(--accent-red);
             color: white;
-            font-weight: bold;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-whatsapp-support {
-            background: #25D366;
-        }
-        
-        .btn-telegram-support {
-            background: #0088cc;
-        }
-        
-        .btn-whatsapp-support:hover, .btn-telegram-support:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
-        }
-        
-        .btn-icon {
-            padding: 0.5rem;
-            border-radius: 50%;
-            color: white;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-icon.whatsapp-icon {
-            background: #25D366;
-        }
-        
-        .btn-icon.telegram-icon {
-            background: #0088cc;
-        }
-        
-        .btn-icon:hover {
-            transform: scale(1.2);
-        }
-        
-        .payment-row.status-pending {
-            background: rgba(255, 170, 0, 0.1);
-            border-left: 4px solid var(--accent-yellow);
-        }
-        
-        .payment-row.status-approved {
-            background: rgba(0, 255, 0, 0.05);
-            border-left: 4px solid var(--accent-green);
-        }
-        
-        .payment-row.status-rejected {
-            background: rgba(255, 68, 68, 0.05);
-            border-left: 4px solid var(--accent-red);
-        }
-        
-        .utr-cell {
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
-        }
-        
-        .approved-by {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            background: rgba(0,0,0,0.3);
             padding: 0.2rem 0.5rem;
-            border-radius: 4px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            margin-left: 0.5rem;
         }
         
-        .btn-warning {
+        .btn-toggle-product {
             background: var(--accent-yellow);
             color: black;
         }
         
-        .btn-warning:hover {
+        .btn-toggle-product:hover {
             background: #ff9900;
         }
         
-        .btn-success {
-            background: var(--accent-green);
-            color: black;
+        .flex {
+            display: flex;
+        }
+        
+        .gap-2 {
+            gap: 1rem;
         }
         
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 1.5rem;
+            gap: 1rem;
             margin-bottom: 2rem;
         }
         
         .stat-card {
             background: linear-gradient(145deg, #1a1a1a, #000);
-            padding: 1.5rem;
-            border-radius: 15px;
+            padding: 1.2rem;
+            border-radius: 12px;
             border: 2px solid var(--accent-pink);
             text-align: center;
-            transition: all 0.3s ease;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 0 30px rgba(255,0,255,0.3);
-        }
-        
-        .stat-card i {
-            font-size: 2rem;
-            color: var(--accent-pink);
-            margin-bottom: 0.5rem;
         }
         
         .stat-card h3 {
-            font-size: 1rem;
-            color: var(--text-secondary);
+            font-size: 0.9rem;
             margin-bottom: 0.5rem;
+            color: var(--accent-pink);
         }
         
-        .stat-card .stat-value {
+        .stat-card h3 i {
+            margin-right: 0.3rem;
+        }
+        
+        .stat-value {
             font-size: 1.8rem;
-            color: var(--accent-green);
             font-weight: bold;
-            text-shadow: 0 0 10px rgba(0,255,0,0.5);
+            color: var(--accent-green);
         }
         
         @media (max-width: 768px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-            
-            .support-links-bar {
-                flex-direction: column;
-            }
-            
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
-                gap: 1rem;
             }
             
-            .stat-card .stat-value {
+            .stat-value {
                 font-size: 1.4rem;
-            }
-        }
-        
-        @media (max-width: 480px) {
-            .stats-grid {
-                grid-template-columns: 1fr;
             }
         }
     </style>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // Additional admin functions
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // Toggle Product Status
+            document.querySelectorAll('.btn-toggle-product').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const productId = this.dataset.productId;
+                    const isActive = this.dataset.active === '1' ? 0 : 1;
+                    
+                    fetch('/admin/toggle_product', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            product_id: productId, 
+                            is_active: isActive 
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert('Failed to toggle product');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred');
+                    });
+                });
+            });
+            
+            // Reject Payment
+            document.querySelectorAll('.btn-reject-payment').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (!confirm('Reject this payment?')) return;
+                    
+                    const paymentId = this.dataset.paymentId;
+                    
+                    fetch('/admin/reject_payment', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ payment_id: paymentId })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('Payment rejected');
+                            location.reload();
+                        } else {
+                            alert('Failed to reject payment');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred');
+                    });
+                });
+            });
+            
+            // Tab switching
+            const tabs = document.querySelectorAll('.tab-btn');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabName = this.dataset.tab;
+                    
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    
+                    this.classList.add('active');
+                    document.getElementById(tabName + '-tab').classList.add('active');
+                });
+            });
+            
+            // Add Product
+            const addProductBtn = document.getElementById('add-product-btn');
+            const addProductForm = document.getElementById('add-product-form');
+            const cancelProductBtn = document.getElementById('cancel-product');
+            
+            if (addProductBtn) {
+                addProductBtn.addEventListener('click', () => {
+                    addProductForm.style.display = 'block';
+                });
+            }
+            
+            if (cancelProductBtn) {
+                cancelProductBtn.addEventListener('click', () => {
+                    addProductForm.style.display = 'none';
+                });
+            }
+            
+            // Save Product
+            const saveProductBtn = document.getElementById('save-product');
+            if (saveProductBtn) {
+                saveProductBtn.addEventListener('click', function() {
+                    const name = document.getElementById('new-product-name').value;
+                    const credits = document.getElementById('new-product-credits').value;
+                    const price = document.getElementById('new-product-price').value;
+                    const keyType = document.getElementById('new-product-keytype').value;
+                    
+                    if (!name || !credits || !price) {
+                        alert('Please fill all fields');
+                        return;
+                    }
+                    
+                    fetch('/admin/add_product', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: name,
+                            credit_cost_per_day: credits,
+                            price_per_day: price,
+                            key_type: keyType
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('Product added successfully');
+                            location.reload();
+                        } else {
+                            alert('Error: ' + (data.error || 'Failed to add product'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred');
+                    });
+                });
+            }
+            
+            // Edit Product
+            const editModal = document.getElementById('edit-product-modal');
+            const closeModal = document.getElementById('close-modal');
+            
+            document.querySelectorAll('.btn-edit-product').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const row = this.closest('tr');
+                    const cells = row.querySelectorAll('td');
+                    
+                    document.getElementById('edit-product-id').value = this.dataset.productId;
+                    document.getElementById('edit-product-name').value = cells[0].textContent.trim();
+                    document.getElementById('edit-product-credits').value = cells[1].textContent.trim();
+                    document.getElementById('edit-product-price').value = cells[2].textContent.replace('₹', '');
+                    
+                    const keyType = cells[3].textContent.trim();
+                    const select = document.getElementById('edit-product-keytype');
+                    for (let option of select.options) {
+                        if (option.value === keyType) {
+                            option.selected = true;
+                            break;
+                        }
+                    }
+                    
+                    editModal.style.display = 'flex';
+                });
+            });
+            
+            // Update Product
+            const updateBtn = document.getElementById('update-product');
+            if (updateBtn) {
+                updateBtn.addEventListener('click', function() {
+                    const productId = document.getElementById('edit-product-id').value;
+                    const name = document.getElementById('edit-product-name').value;
+                    const credits = document.getElementById('edit-product-credits').value;
+                    const price = document.getElementById('edit-product-price').value;
+                    const keyType = document.getElementById('edit-product-keytype').value;
+                    
+                    fetch('/admin/edit_product', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            product_id: productId,
+                            name: name,
+                            credit_cost_per_day: credits,
+                            price_per_day: price,
+                            key_type: keyType
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('Product updated');
+                            location.reload();
+                        } else {
+                            alert('Update failed');
+                        }
+                    });
+                });
+            }
+            
+            if (closeModal) {
+                closeModal.addEventListener('click', () => {
+                    editModal.style.display = 'none';
+                });
+            }
+            
+            // Delete Product
+            document.querySelectorAll('.btn-delete-product').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (!confirm('Delete this product?')) return;
+                    
+                    fetch('/admin/delete_product', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ product_id: this.dataset.productId })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        }
+                    });
+                });
+            });
+            
+            // Add Credits
+            const creditsModal = document.getElementById('add-credits-modal');
+            const closeCredits = document.getElementById('close-credits-modal');
+            
+            document.querySelectorAll('.btn-add-credits').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.getElementById('add-credits-username').value = this.dataset.username;
+                    creditsModal.style.display = 'flex';
+                });
+            });
+            
+            document.getElementById('confirm-add-credits').addEventListener('click', function() {
+                const username = document.getElementById('add-credits-username').value;
+                const credits = document.getElementById('add-credits-amount').value;
+                
+                if (!credits || credits < 1) {
+                    alert('Enter valid amount');
+                    return;
+                }
+                
+                fetch('/admin/add_credits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, credits: credits })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Credits added');
+                        location.reload();
+                    }
+                });
+            });
+            
+            if (closeCredits) {
+                closeCredits.addEventListener('click', () => {
+                    creditsModal.style.display = 'none';
+                });
+            }
+            
+            // Delete User
+            document.querySelectorAll('.btn-delete-user').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (!confirm('Delete this user?')) return;
+                    
+                    fetch('/admin/delete_user', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: this.dataset.username })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        }
+                    });
+                });
+            });
+            
+            // Delete Key
+            document.querySelectorAll('.btn-delete-key').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (!confirm('Delete this key?')) return;
+                    
+                    fetch('/admin/delete_key', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ license_id: this.dataset.licenseId })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        }
+                    });
+                });
+            });
+            
+            // Close modals on outside click
+            window.addEventListener('click', (e) => {
+                if (e.target.classList.contains('modal')) {
+                    e.target.style.display = 'none';
+                }
+            });
+        });
+    </script>
 </body>
 </html>
