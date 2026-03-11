@@ -1,7 +1,6 @@
 Flask==2.3.3
 Flask-Bcrypt==1.0.1
 gunicorn==21.2.0
-qrcode==7.4.2
-Pillow==10.0.1
-requests==2.31.0
-typing-extensions==4.12.2
+qrcode[pil]==7.4.2
+pillow==10.1.0
+typing-extensions==4.8.0
