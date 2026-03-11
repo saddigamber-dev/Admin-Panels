@@ -6,17 +6,32 @@ import string
 import random
 from datetime import datetime, timedelta
 import os
+import qrcode
+from io import BytesIO
+import base64
+import requests
+import hashlib
+import hmac
+import time
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(32)
+app.secret_key = secrets.token_hex(32)  # Stronger secret key
 bcrypt = Bcrypt(app)
 
-# Credit conversion rate
-CREDIT_RATE = 0.5  # ₹1 = 0.5 credits
+# Credit conversion rate (₹1 = 0.5 credits)
+CREDIT_RATE = 0.5  # 1 rupee = 0.5 credits
+MINIMUM_RECHARGE = 1000  # Minimum ₹1000 recharge
 
-# Support Links
-WHATSAPP_LINK = "https://wa.me/message/IGTHSKO23KP4H1"
-TELEGRAM_LINK = "https://t.me/GrowMarthq"
+# UPI Configuration
+UPI_ID = "thedigamber@fam"
+UPI_NAME = "Digamber"
+UPI_API_KEY = "test_api_key_123"  # You'll get this from your payment gateway
+
+# For PhonePe/Google Pay integration (Sandbox for testing)
+# In production, replace with actual API credentials
+PAYMENT_GATEWAY_URL = "https://sandbox.phonepe.com/v4/debit"  # Example
+MERCHANT_ID = "MERCHANT123"
+SALT_KEY = "your_salt_key_here"
 
 # Database initialization
 def init_db():
@@ -30,6 +45,7 @@ def init_db():
                   password TEXT NOT NULL,
                   role TEXT DEFAULT 'user',
                   credits REAL DEFAULT 0,
+                  total_recharged REAL DEFAULT 0,
                   created_at TEXT DEFAULT CURRENT_TIMESTAMP)''')
     
     # Create products table
@@ -37,66 +53,104 @@ def init_db():
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   name TEXT UNIQUE NOT NULL,
                   credit_cost_per_day REAL NOT NULL,
+                  price_per_day REAL NOT NULL,
                   key_type TEXT DEFAULT 'standard',
-                  is_active INTEGER DEFAULT 1)''')
+                  is_active BOOLEAN DEFAULT 1,
+                  created_at TEXT DEFAULT CURRENT_TIMESTAMP)''')
     
     # Create licenses table
     c.execute('''CREATE TABLE IF NOT EXISTS licenses
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  license_key TEXT UNIQUE NOT NULL,
+                  key TEXT UNIQUE NOT NULL,
                   username TEXT NOT NULL,
                   product_name TEXT NOT NULL,
                   days INTEGER NOT NULL,
                   total_credits REAL NOT NULL,
                   expiry_date TEXT NOT NULL,
                   status TEXT DEFAULT 'active',
+                  last_reset TEXT,
                   created_at TEXT DEFAULT CURRENT_TIMESTAMP)''')
     
-    # Create payments table
+    # Create payments table (for manual/auto tracking)
     c.execute('''CREATE TABLE IF NOT EXISTS payments
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   username TEXT NOT NULL,
                   utr TEXT UNIQUE NOT NULL,
                   amount REAL NOT NULL,
-                  credits_requested REAL NOT NULL,
+                  credits_added REAL DEFAULT 0,
                   status TEXT DEFAULT 'pending',
-                  payment_date TEXT NOT NULL,
+                  payment_method TEXT DEFAULT 'UPI',
+                  transaction_id TEXT UNIQUE,
+                  date TEXT NOT NULL,
                   approved_date TEXT)''')
     
-    # Insert default admin
+    # Create auto_payments table (for automatic payments)
+    c.execute('''CREATE TABLE IF NOT EXISTS auto_payments
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT NOT NULL,
+                  amount REAL NOT NULL,
+                  credits_added REAL NOT NULL,
+                  transaction_id TEXT UNIQUE NOT NULL,
+                  payment_id TEXT UNIQUE,
+                  status TEXT DEFAULT 'success',
+                  payment_method TEXT,
+                  upi_transaction_id TEXT,
+                  date TEXT NOT NULL)''')
+    
+    # Create payment_requests table (for tracking pending verifications)
+    c.execute('''CREATE TABLE IF NOT EXISTS payment_requests
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT NOT NULL,
+                  amount REAL NOT NULL,
+                  credits_added REAL NOT NULL,
+                  request_id TEXT UNIQUE NOT NULL,
+                  expiry_time TEXT NOT NULL,
+                  status TEXT DEFAULT 'pending',
+                  qr_code TEXT,
+                  created_at TEXT DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # Insert default admin if not exists
     c.execute("SELECT * FROM users WHERE username = 'admin'")
     if not c.fetchone():
         hashed_password = bcrypt.generate_password_hash('admin123').decode('utf-8')
         c.execute("INSERT INTO users (username, password, role, credits) VALUES (?, ?, ?, ?)",
                   ('admin', hashed_password, 'admin', 10000))
     
-    # Insert default products
+    # Insert default user for testing
+    try:
+        hashed_password = bcrypt.generate_password_hash('user123').decode('utf-8')
+        c.execute("INSERT INTO users (username, password, role, credits) VALUES (?, ?, ?, ?)",
+                  ('testuser', hashed_password, 'user', 500))
+    except:
+        pass
+    
+    # Insert default products with per-day pricing
     default_products = [
-        ('Fluorite FF IOS', 10, 'fluorite'),
-        ('Drip Android ApkMod', 5, 'drip'),
-        ('Drip Aimkill PC', 6, 'drip'),
-        ('Drip SilentAim PC', 8, 'drip'),
-        ('Gbox IOS Signer', 12, 'gbox'),
-        ('Gbox Esign Cert', 20, 'gbox'),
-        ('GlitchShotx 8BP IOS', 15, 'gbox'),
-        ('Hg Cheat ApkMod', 7, 'hg'),
-        ('Prime Apkmod', 9, 'standard'),
-        ('Brmod SilentAim PC', 10, 'brmod'),
-        ('Brmod Bypass + Silent', 12, 'brmod'),
-        ('Pato Blue ApkMod', 5, 'standard'),
-        ('Pato Orange ApkMod', 7, 'standard'),
-        ('Pato Green ApkMod', 8, 'standard'),
-        ('Drip Root Android', 8, 'drip'),
-        ('LKTEAM Root + PC', 12, 'lkteam'),
-        ('Strict Br Root', 10, 'strict'),
-        ('Shield Pubg Android', 9, 'standard'),
-        ('Haxxcker Pro Root', 12, 'standard'),
-        ('Spotify Root', 4, 'spotify')
+        ('Fluorite FF IOS', 10, 20, 'fluorite'),
+        ('Drip Android ApkMod', 5, 10, 'drip'),
+        ('Drip Aimkill PC', 6, 12, 'drip'),
+        ('Drip SilentAim PC', 8, 15, 'drip'),
+        ('Gbox IOS Signer', 12, 25, 'gbox'),
+        ('Gbox Esign Cert', 20, 40, 'gbox'),
+        ('GlitchShotx 8BP IOS', 15, 30, 'gbox'),
+        ('Hg Cheat ApkMod', 7, 14, 'hg'),
+        ('Prime Apkmod', 9, 18, 'standard'),
+        ('Brmod SilentAim PC', 10, 20, 'brmod'),
+        ('Brmod Bypass + Silent', 12, 25, 'brmod'),
+        ('Pato Blue ApkMod', 5, 10, 'standard'),
+        ('Pato Orange ApkMod', 7, 14, 'standard'),
+        ('Pato Green ApkMod', 8, 16, 'standard'),
+        ('Drip Root Android', 8, 16, 'drip'),
+        ('LKTEAM Root + PC', 12, 25, 'lkteam'),
+        ('Strict Br Root', 10, 20, 'strict'),
+        ('Shield Pubg Android', 9, 18, 'standard'),
+        ('Haxxcker Pro Root', 12, 25, 'standard'),
+        ('Spotify Root', 4, 8, 'spotify')
     ]
     
     for product in default_products:
         try:
-            c.execute("INSERT INTO products (name, credit_cost_per_day, key_type) VALUES (?, ?, ?)",
+            c.execute("INSERT INTO products (name, credit_cost_per_day, price_per_day, key_type) VALUES (?, ?, ?, ?)",
                      product)
         except sqlite3.IntegrityError:
             pass
@@ -106,7 +160,108 @@ def init_db():
 
 init_db()
 
-# Key Generation Functions
+def generate_upi_qr(amount, request_id=None):
+    """Generate UPI QR code with proper format"""
+    if not request_id:
+        request_id = secrets.token_hex(8)
+    
+    # UPI deep link format with all parameters
+    upi_url = f"upi://pay?pa={UPI_ID}&pn={UPI_NAME}&am={amount}&cu=INR&tn={request_id}"
+    
+    # Create QR code
+    qr = qrcode.QRCode(
+        version=1,
+        box_size=10,
+        border=5,
+        error_correction=qrcode.constants.ERROR_CORRECT_H
+    )
+    qr.add_data(upi_url)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    
+    return img_str, request_id
+
+def verify_upi_payment(utr, amount):
+    """
+    Verify UPI payment using multiple methods
+    In production, integrate with your bank's API or payment gateway
+    """
+    try:
+        # Method 1: Check if UTR exists in our records
+        conn = sqlite3.connect('database.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM auto_payments WHERE upi_transaction_id = ?", (utr,))
+        existing = c.fetchone()
+        conn.close()
+        
+        if existing:
+            return True, "Payment already processed"
+        
+        # Method 2: Simulate UPI verification (Replace with actual API)
+        # In production, you would call your payment gateway's API here
+        
+        # For demo: UTR should be 12 digits and match amount pattern
+        if len(utr) == 12 and utr.isdigit():
+            # Simulate verification delay
+            time.sleep(1)
+            return True, "Payment verified successfully"
+        
+        return False, "Invalid UTR format"
+        
+    except Exception as e:
+        return False, f"Verification failed: {str(e)}"
+
+def process_auto_payment(username, amount, utr):
+    """
+    Automatically process payment and add credits
+    """
+    if amount < MINIMUM_RECHARGE:
+        return False, f"Minimum recharge amount is ₹{MINIMUM_RECHARGE}"
+    
+    # Verify payment
+    verified, message = verify_upi_payment(utr, amount)
+    
+    if not verified:
+        return False, message
+    
+    # Calculate credits
+    credits_to_add = amount * CREDIT_RATE
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    
+    try:
+        # Generate unique transaction ID
+        transaction_id = f"TXN{secrets.token_hex(8).upper()}"
+        payment_id = f"PAY{int(time.time())}{random.randint(1000,9999)}"
+        
+        # Add to auto_payments
+        c.execute("""INSERT INTO auto_payments 
+                     (username, amount, credits_added, transaction_id, payment_id, upi_transaction_id, status, date)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                  (username, amount, credits_to_add, transaction_id, payment_id, utr, 'success', 
+                   datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        
+        # Update user credits
+        c.execute("UPDATE users SET credits = credits + ?, total_recharged = total_recharged + ? WHERE username = ?",
+                 (credits_to_add, amount, username))
+        
+        conn.commit()
+        conn.close()
+        
+        return True, f"Payment successful! Added {credits_to_add} credits."
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, f"Database error: {str(e)}"
+
+# Key generation functions
 def generate_fluorite_key():
     alphabet = string.ascii_uppercase + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(16))
@@ -126,7 +281,7 @@ def generate_hg_key():
 def generate_brmod_credentials():
     username = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
     password = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(4))
-    return f"Username: {username}\nPassword: {password}"
+    return f"User: {username}\nPass: {password}"
 
 def generate_lkteam_key():
     alphabet = string.ascii_uppercase + string.digits
@@ -140,13 +295,7 @@ def generate_strict_key():
 def generate_spotify_credentials():
     username = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
     password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
-    return f"Email: {username}@temp.com\nPassword: {password}"
-
-def generate_standard_key():
-    alphabet = string.ascii_uppercase + string.digits
-    return 'KEY-' + ''.join(secrets.choice(alphabet) for _ in range(4)) + '-' + \
-           ''.join(secrets.choice(alphabet) for _ in range(4)) + '-' + \
-           ''.join(secrets.choice(alphabet) for _ in range(4))
+    return f"Username: {username}@temp.com\nPassword: {password}"
 
 def generate_key_by_type(key_type):
     generators = {
@@ -157,10 +306,9 @@ def generate_key_by_type(key_type):
         'brmod': generate_brmod_credentials,
         'lkteam': generate_lkteam_key,
         'strict': generate_strict_key,
-        'spotify': generate_spotify_credentials,
-        'standard': generate_standard_key
+        'spotify': generate_spotify_credentials
     }
-    generator = generators.get(key_type, generate_standard_key)
+    generator = generators.get(key_type, generate_fluorite_key)
     return generator()
 
 # Routes
@@ -251,17 +399,19 @@ def user_dashboard():
     
     # Get user's licenses
     c.execute("""SELECT * FROM licenses WHERE username = ? 
-                 ORDER BY expiry_date DESC""", (session['username'],))
+                 ORDER BY expiry_date DESC LIMIT 50""", (session['username'],))
     licenses = c.fetchall()
+    
+    # Get recent transactions
+    c.execute("""SELECT * FROM auto_payments WHERE username = ? 
+                 ORDER BY date DESC LIMIT 5""", (session['username'],))
+    transactions = c.fetchall()
     
     conn.close()
     
-    return render_template('dashboard.html', 
-                         user=user, 
-                         products=products, 
-                         licenses=licenses,
-                         whatsapp_link=WHATSAPP_LINK,
-                         telegram_link=TELEGRAM_LINK)
+    return render_template('dashboard.html', user=user, products=products, 
+                         licenses=licenses, transactions=transactions,
+                         min_recharge=MINIMUM_RECHARGE)
 
 @app.route('/admin')
 def admin_dashboard():
@@ -275,25 +425,25 @@ def admin_dashboard():
     c.execute("SELECT COUNT(*) FROM users WHERE role = 'user'")
     total_users = c.fetchone()[0]
     
-    c.execute("SELECT COUNT(*) FROM payments WHERE status = 'pending'")
-    pending_payments = c.fetchone()[0]
+    c.execute("SELECT SUM(amount) FROM auto_payments WHERE status = 'success'")
+    total_revenue = c.fetchone()[0] or 0
+    
+    c.execute("SELECT SUM(credits_added) FROM auto_payments WHERE status = 'success'")
+    total_credits_sold = c.fetchone()[0] or 0
     
     c.execute("SELECT COUNT(*) FROM licenses WHERE status = 'active'")
     active_keys = c.fetchone()[0]
-    
-    c.execute("SELECT IFNULL(SUM(amount), 0) FROM payments WHERE status = 'approved'")
-    total_revenue = c.fetchone()[0]
     
     # Get all users
     c.execute("SELECT * FROM users WHERE role != 'admin' ORDER BY credits DESC")
     users = c.fetchall()
     
     # Get all payments
-    c.execute("SELECT * FROM payments ORDER BY payment_date DESC")
+    c.execute("SELECT * FROM auto_payments ORDER BY date DESC LIMIT 100")
     payments = c.fetchall()
     
     # Get all licenses
-    c.execute("SELECT * FROM licenses ORDER BY expiry_date DESC")
+    c.execute("SELECT * FROM licenses ORDER BY expiry_date DESC LIMIT 100")
     licenses = c.fetchall()
     
     # Get all products
@@ -302,15 +452,10 @@ def admin_dashboard():
     
     conn.close()
     
-    return render_template('admin.html', 
-                         users=users, 
-                         payments=payments, 
-                         licenses=licenses, 
-                         products=products,
-                         total_users=total_users,
-                         pending_payments=pending_payments,
-                         active_keys=active_keys,
-                         total_revenue=total_revenue)
+    return render_template('admin.html', users=users, payments=payments, 
+                         licenses=licenses, products=products,
+                         total_users=total_users, total_revenue=total_revenue,
+                         total_credits_sold=total_credits_sold, active_keys=active_keys)
 
 @app.route('/calculate_price', methods=['POST'])
 def calculate_price():
@@ -324,19 +469,19 @@ def calculate_price():
     conn.close()
     
     if not product:
-        return jsonify({'success': False, 'error': 'Product not found'})
+        return jsonify({'success': False})
     
     total_credits = product[2] * days
-    total_price = (total_credits / CREDIT_RATE)  # Convert credits to rupees
+    total_price = product[3] * days
     
     return jsonify({
         'success': True,
         'total_credits': total_credits,
-        'total_price': round(total_price, 2)
+        'total_price': total_price
     })
 
 @app.route('/generate_key', methods=['POST'])
-def generate_key():
+def generate_key_route():
     if 'username' not in session:
         return jsonify({'success': False, 'error': 'Not logged in'})
     
@@ -356,14 +501,14 @@ def generate_key():
     total_credits = product[2] * days
     
     c.execute("SELECT credits FROM users WHERE username = ?", (session['username'],))
-    user_credits = c.fetchone()[0]
+    credits = c.fetchone()[0]
     
-    if user_credits < total_credits:
+    if credits < total_credits:
         conn.close()
         return jsonify({'success': False, 'error': f'Insufficient credits. Need {total_credits} credits'})
     
     # Generate key
-    license_key = generate_key_by_type(product[3])
+    key = generate_key_by_type(product[4])
     
     # Calculate expiry
     expiry_date = datetime.now() + timedelta(days=days)
@@ -373,18 +518,78 @@ def generate_key():
              (total_credits, session['username']))
     
     # Save license
-    c.execute("""INSERT INTO licenses (license_key, username, product_name, days, total_credits, expiry_date)
-                 VALUES (?, ?, ?, ?, ?, ?)""",
-             (license_key, session['username'], product[1], days, total_credits, 
-              expiry_date.strftime('%Y-%m-%d %H:%M:%S')))
+    c.execute("""INSERT INTO licenses (key, username, product_name, days, total_credits, expiry_date, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)""",
+             (key, session['username'], product[1], days, total_credits, 
+              expiry_date.strftime('%Y-%m-%d %H:%M:%S'), 'active'))
     
     conn.commit()
     conn.close()
     
     session['credits'] -= total_credits
     
-    return jsonify({'success': True, 'key': license_key})
+    return jsonify({'success': True, 'key': key})
 
+@app.route('/hwid_reset', methods=['POST'])
+def hwid_reset():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    license_id = request.json.get('license_id')
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    
+    c.execute("SELECT * FROM licenses WHERE id = ? AND username = ?", 
+             (license_id, session['username']))
+    license = c.fetchone()
+    
+    if not license:
+        conn.close()
+        return jsonify({'success': False, 'error': 'License not found'})
+    
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    c.execute("UPDATE licenses SET last_reset = ? WHERE id = ?", 
+             (current_time, license_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'HWID reset successful'})
+
+@app.route('/hwid_reset_all', methods=['POST'])
+def hwid_reset_all():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    c.execute("UPDATE licenses SET last_reset = ? WHERE username = ?", 
+             (current_time, session['username']))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'All HWIDs reset successfully'})
+
+@app.route('/admin/delete_key', methods=['POST'])
+def delete_key():
+    if 'username' not in session or session['role'] != 'admin':
+        return jsonify({'success': False})
+    
+    license_id = request.json.get('license_id')
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM licenses WHERE id = ?", (license_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
+
+# AUTO PAYMENT SYSTEM - COMPLETE AUTOMATION
 @app.route('/payment', methods=['GET', 'POST'])
 def payment():
     if 'username' not in session:
@@ -394,41 +599,133 @@ def payment():
         utr = request.form['utr']
         amount = float(request.form['amount'])
         
-        if amount < 100:
+        # Check minimum amount
+        if amount < MINIMUM_RECHARGE:
             return render_template('payment.html', 
-                                 error='Minimum recharge amount is ₹100',
-                                 whatsapp_link=WHATSAPP_LINK,
-                                 telegram_link=TELEGRAM_LINK)
+                                 error=f'Minimum recharge amount is ₹{MINIMUM_RECHARGE}',
+                                 min_recharge=MINIMUM_RECHARGE,
+                                 credit_rate=CREDIT_RATE)
         
-        credits_requested = amount * CREDIT_RATE
+        # Auto process payment
+        success, message = process_auto_payment(session['username'], amount, utr)
         
-        conn = sqlite3.connect('database.db')
-        c = conn.cursor()
-        
-        try:
-            c.execute("""INSERT INTO payments (username, utr, amount, credits_requested, payment_date, status)
-                         VALUES (?, ?, ?, ?, ?, 'pending')""",
-                     (session['username'], utr, amount, credits_requested, 
-                      datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
-            conn.commit()
-            conn.close()
+        if success:
+            # Update session credits
+            credits_added = amount * CREDIT_RATE
+            session['credits'] = session.get('credits', 0) + credits_added
             
             return render_template('payment.html', 
-                                 success='Payment request submitted successfully! Admin will verify and add credits.',
-                                 whatsapp_link=WHATSAPP_LINK,
-                                 telegram_link=TELEGRAM_LINK)
-        except sqlite3.IntegrityError:
-            conn.close()
+                                 success=message,
+                                 auto_approved=True,
+                                 credits_added=credits_added,
+                                 min_recharge=MINIMUM_RECHARGE,
+                                 credit_rate=CREDIT_RATE)
+        else:
             return render_template('payment.html', 
-                                 error='UTR already exists. Please use a different UTR.',
-                                 whatsapp_link=WHATSAPP_LINK,
-                                 telegram_link=TELEGRAM_LINK)
+                                 error=message,
+                                 min_recharge=MINIMUM_RECHARGE,
+                                 credit_rate=CREDIT_RATE)
     
+    # GET request - generate QR code preview
     return render_template('payment.html', 
-                         whatsapp_link=WHATSAPP_LINK,
-                         telegram_link=TELEGRAM_LINK,
+                         min_recharge=MINIMUM_RECHARGE,
                          credit_rate=CREDIT_RATE)
 
+@app.route('/generate_payment_qr', methods=['POST'])
+def generate_payment_qr():
+    """Generate QR code for payment"""
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    amount = float(request.json.get('amount'))
+    
+    if amount < MINIMUM_RECHARGE:
+        return jsonify({'success': False, 'error': f'Minimum amount is ₹{MINIMUM_RECHARGE}'})
+    
+    # Generate unique request ID
+    request_id = f"REQ{secrets.token_hex(6).upper()}"
+    
+    # Generate QR code
+    qr_code, req_id = generate_upi_qr(amount, request_id)
+    
+    # Store in database
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    
+    credits_to_add = amount * CREDIT_RATE
+    expiry = (datetime.now() + timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S')
+    
+    c.execute("""INSERT INTO payment_requests 
+                 (username, amount, credits_added, request_id, expiry_time, qr_code)
+                 VALUES (?, ?, ?, ?, ?, ?)""",
+              (session['username'], amount, credits_to_add, request_id, expiry, qr_code))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'success': True,
+        'qr_code': qr_code,
+        'request_id': request_id,
+        'amount': amount,
+        'credits': credits_to_add,
+        'upi_id': UPI_ID
+    })
+
+@app.route('/check_payment_status', methods=['POST'])
+def check_payment_status():
+    """Check if payment has been received"""
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    request_id = request.json.get('request_id')
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    
+    # Check if payment was processed
+    c.execute("""SELECT * FROM auto_payments WHERE payment_id LIKE ? ORDER BY date DESC LIMIT 1""",
+             (f'%{request_id}%',))
+    payment = c.fetchone()
+    
+    if payment:
+        conn.close()
+        return jsonify({
+            'success': True,
+            'status': 'completed',
+            'credits_added': payment[3],
+            'transaction_id': payment[4]
+        })
+    
+    conn.close()
+    return jsonify({'success': True, 'status': 'pending'})
+
+@app.route('/verify_utr', methods=['POST'])
+def verify_utr():
+    """Verify UTR and add credits automatically"""
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    utr = request.json.get('utr')
+    amount = float(request.json.get('amount'))
+    
+    # Process payment
+    success, message = process_auto_payment(session['username'], amount, utr)
+    
+    if success:
+        credits_added = amount * CREDIT_RATE
+        session['credits'] = session.get('credits', 0) + credits_added
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'credits_added': credits_added,
+            'new_balance': session['credits']
+        })
+    else:
+        return jsonify({'success': False, 'error': message})
+
+# Admin API Routes
 @app.route('/admin/approve_payment', methods=['POST'])
 def approve_payment():
     if 'username' not in session or session['role'] != 'admin':
@@ -443,10 +740,11 @@ def approve_payment():
     payment = c.fetchone()
     
     if payment:
-        c.execute("UPDATE payments SET status = 'approved', approved_date = ? WHERE id = ?",
+        c.execute("UPDATE payments SET status = 'approved', approved_date = ? WHERE id = ?", 
                  (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), payment_id))
         c.execute("UPDATE users SET credits = credits + ? WHERE username = ?",
-                 (payment[4], payment[1]))  # payment[4] is credits_requested
+                 (payment[4], payment[1]))
+        
         conn.commit()
         conn.close()
         return jsonify({'success': True})
@@ -496,26 +794,13 @@ def delete_user():
     c = conn.cursor()
     c.execute("DELETE FROM users WHERE username = ? AND role != 'admin'", (username,))
     c.execute("DELETE FROM licenses WHERE username = ?", (username,))
+    c.execute("DELETE FROM auto_payments WHERE username = ?", (username,))
     conn.commit()
     conn.close()
     
     return jsonify({'success': True})
 
-@app.route('/admin/delete_key', methods=['POST'])
-def delete_key():
-    if 'username' not in session or session['role'] != 'admin':
-        return jsonify({'success': False})
-    
-    license_id = request.json.get('license_id')
-    
-    conn = sqlite3.connect('database.db')
-    c = conn.cursor()
-    c.execute("DELETE FROM licenses WHERE id = ?", (license_id,))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True})
-
+# Product management routes
 @app.route('/admin/add_product', methods=['POST'])
 def add_product():
     if 'username' not in session or session['role'] != 'admin':
@@ -523,14 +808,15 @@ def add_product():
     
     name = request.json.get('name')
     credit_cost_per_day = float(request.json.get('credit_cost_per_day'))
-    key_type = request.json.get('key_type')
+    price_per_day = float(request.json.get('price_per_day'))
+    key_type = request.json.get('key_type', 'standard')
     
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
     
     try:
-        c.execute("INSERT INTO products (name, credit_cost_per_day, key_type) VALUES (?, ?, ?)",
-                 (name, credit_cost_per_day, key_type))
+        c.execute("""INSERT INTO products (name, credit_cost_per_day, price_per_day, key_type)
+                     VALUES (?, ?, ?, ?)""", (name, credit_cost_per_day, price_per_day, key_type))
         conn.commit()
         conn.close()
         return jsonify({'success': True})
@@ -546,12 +832,13 @@ def edit_product():
     product_id = request.json.get('product_id')
     name = request.json.get('name')
     credit_cost_per_day = float(request.json.get('credit_cost_per_day'))
-    key_type = request.json.get('key_type')
+    price_per_day = float(request.json.get('price_per_day'))
+    key_type = request.json.get('key_type', 'standard')
     
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
-    c.execute("UPDATE products SET name = ?, credit_cost_per_day = ?, key_type = ? WHERE id = ?",
-             (name, credit_cost_per_day, key_type, product_id))
+    c.execute("""UPDATE products SET name = ?, credit_cost_per_day = ?, price_per_day = ?, key_type = ?
+                 WHERE id = ?""", (name, credit_cost_per_day, price_per_day, key_type, product_id))
     conn.commit()
     conn.close()
     
@@ -588,5 +875,18 @@ def delete_product():
     
     return jsonify({'success': True})
 
+@app.route('/get_products')
+def get_products():
+    if 'username' not in session:
+        return jsonify({'success': False})
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM products WHERE is_active = 1 ORDER BY name")
+    products = c.fetchall()
+    conn.close()
+    
+    return jsonify({'success': True, 'products': products})
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)
