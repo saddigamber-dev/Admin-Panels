@@ -18,7 +18,10 @@
         <div class="payment-container">
             <div class="card">
                 <h2>Recharge Credits</h2>
-                <p class="upi-info">UPI ID: <strong>thedigamber@fam</strong></p>
+                <div class="upi-info">
+                    <p>UPI ID: <strong>thedigamber@fam</strong></p>
+                    <p class="rate-info">💰 ₹1 = 0.5 Credits</p>
+                </div>
                 
                 {% if success %}
                 <div class="success-message">{{ success }}</div>
@@ -32,44 +35,48 @@
                 <div class="qr-code-display">
                     <img src="data:image/png;base64,{{ qr_code }}" alt="Payment QR Code">
                     <p class="amount-display">Amount: ₹{{ amount }}</p>
-                </div>
-                {% else %}
-                <div class="qr-placeholder">
-                    <p>Enter amount to generate QR</p>
+                    <p class="credits-display-small">You will get: {{ amount * 0.5 }} Credits</p>
                 </div>
                 {% endif %}
                 
                 <form method="POST" action="{{ url_for('payment') }}" id="payment-form">
                     <div class="form-group">
-                        <label for="amount">Amount (₹)</label>
+                        <label for="amount">Enter Amount (₹)</label>
                         <input type="number" id="amount" name="amount" step="1" min="1" required 
-                               onchange="updateQRPreview(this.value)">
+                               onchange="updateCreditPreview(this.value)">
+                        <small id="credit-preview">You will get: 0 Credits</small>
                     </div>
                     
                     <div class="form-group">
                         <label for="utr">UTR Number (12 digits)</label>
-                        <input type="text" id="utr" name="utr" pattern="\d{12}" maxlength="12" required>
+                        <input type="text" id="utr" name="utr" pattern="\d{12}" maxlength="12" required 
+                               placeholder="Enter 12 digit UTR number">
                         <small>Enter the 12-digit UTR number from your payment</small>
                     </div>
                     
-                    <button type="submit" class="btn-primary">Submit Payment</button>
+                    <button type="submit" class="btn-primary" id="submit-payment">Generate QR & Submit</button>
                 </form>
                 
                 <div class="payment-info">
-                    <p><strong>Note:</strong> Credits will be added after admin approval.</p>
-                    <p>Scan QR code with any UPI app (Google Pay, PhonePe, Paytm)</p>
+                    <p><strong>📱 How to pay:</strong></p>
+                    <ol>
+                        <li>Scan QR code with any UPI app</li>
+                        <li>Pay the exact amount</li>
+                        <li>Copy the 12-digit UTR number</li>
+                        <li>Paste UTR and submit</li>
+                        <li>Credits added after admin approval</li>
+                    </ol>
+                    <p class="note">⚠️ UTR is mandatory for verification</p>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-    function updateQRPreview(amount) {
-        // This will trigger a page reload with the amount to generate QR
-        if (amount && amount > 0) {
-            // You can implement live QR generation here if needed
-            console.log('Amount selected: ₹' + amount);
-        }
+    function updateCreditPreview(amount) {
+        const credits = amount * 0.5;
+        document.getElementById('credit-preview').textContent = `You will get: ${credits} Credits`;
+        document.getElementById('credit-preview').style.color = '#00ff00';
     }
     </script>
 
