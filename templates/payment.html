@@ -18,6 +18,7 @@
         <div class="payment-container">
             <div class="card">
                 <h2>Recharge Credits</h2>
+                <p class="upi-info">UPI ID: <strong>thedigamber@fam</strong></p>
                 
                 {% if success %}
                 <div class="success-message">{{ success }}</div>
@@ -27,15 +28,22 @@
                 <div class="error-message">{{ error }}</div>
                 {% endif %}
                 
-                <div class="qr-placeholder">
-                    <p>QR Code Placeholder</p>
-                    <p class="qr-note">Scan to pay (UPI/QR)</p>
+                {% if qr_code %}
+                <div class="qr-code-display">
+                    <img src="data:image/png;base64,{{ qr_code }}" alt="Payment QR Code">
+                    <p class="amount-display">Amount: ₹{{ amount }}</p>
                 </div>
+                {% else %}
+                <div class="qr-placeholder">
+                    <p>Enter amount to generate QR</p>
+                </div>
+                {% endif %}
                 
-                <form method="POST" action="{{ url_for('payment') }}">
+                <form method="POST" action="{{ url_for('payment') }}" id="payment-form">
                     <div class="form-group">
-                        <label for="amount">Amount ($)</label>
-                        <input type="number" id="amount" name="amount" step="0.01" min="1" required>
+                        <label for="amount">Amount (₹)</label>
+                        <input type="number" id="amount" name="amount" step="1" min="1" required 
+                               onchange="updateQRPreview(this.value)">
                     </div>
                     
                     <div class="form-group">
@@ -49,10 +57,21 @@
                 
                 <div class="payment-info">
                     <p><strong>Note:</strong> Credits will be added after admin approval.</p>
+                    <p>Scan QR code with any UPI app (Google Pay, PhonePe, Paytm)</p>
                 </div>
             </div>
         </div>
     </div>
+
+    <script>
+    function updateQRPreview(amount) {
+        // This will trigger a page reload with the amount to generate QR
+        if (amount && amount > 0) {
+            // You can implement live QR generation here if needed
+            console.log('Amount selected: ₹' + amount);
+        }
+    }
+    </script>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
