@@ -9,10 +9,14 @@ import os
 import qrcode
 from io import BytesIO
 import base64
+import re
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 bcrypt = Bcrypt(app)
+
+# Credit conversion rate (₹1 = 0.5 credits)
+CREDIT_RATE = 0.5  # 1 rupee = 0.5 credits
 
 # Database initialization
 def init_db():
@@ -25,15 +29,14 @@ def init_db():
                   username TEXT UNIQUE NOT NULL,
                   password TEXT NOT NULL,
                   role TEXT DEFAULT 'user',
-                  credits INTEGER DEFAULT 0)''')
+                  credits REAL DEFAULT 0)''')  # Changed to REAL for decimal credits
     
-    # Create products table with days dropdown
+    # Create products table
     c.execute('''CREATE TABLE IF NOT EXISTS products
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   name TEXT UNIQUE NOT NULL,
-                  credit_cost INTEGER NOT NULL,
-                  days INTEGER NOT NULL,
-                  price REAL NOT NULL,
+                  credit_cost_per_day REAL NOT NULL,  # Credits per day
+                  price_per_day REAL NOT NULL,  # Price per day in rupees
                   key_type TEXT DEFAULT 'standard')''')
     
     # Create licenses table
@@ -42,7 +45,8 @@ def init_db():
                   key TEXT UNIQUE NOT NULL,
                   username TEXT NOT NULL,
                   product_name TEXT NOT NULL,
-                  hwid TEXT,
+                  days INTEGER NOT NULL,
+                  total_credits REAL NOT NULL,
                   expiry_date TEXT NOT NULL,
                   status TEXT DEFAULT 'active',
                   last_reset TEXT)''')
@@ -53,8 +57,10 @@ def init_db():
                   username TEXT NOT NULL,
                   utr TEXT UNIQUE NOT NULL,
                   amount REAL NOT NULL,
+                  credits_added REAL DEFAULT 0,
                   status TEXT DEFAULT 'pending',
-                  date TEXT NOT NULL)''')
+                  date TEXT NOT NULL,
+                  approved_date TEXT)''')
     
     # Insert default admin if not exists
     c.execute("SELECT * FROM users WHERE username = 'admin'")
@@ -63,33 +69,33 @@ def init_db():
         c.execute("INSERT INTO users (username, password, role, credits) VALUES (?, ?, ?, ?)",
                   ('admin', hashed_password, 'admin', 1000))
     
-    # Insert default products with days
+    # Insert default products with per-day pricing
     default_products = [
-        ('Fluorite FF IOS', 50, 7, 5.99, 'fluorite'),
-        ('Drip Android ApkMod', 30, 15, 3.99, 'drip'),
-        ('Drip Aimkill PC', 40, 30, 4.99, 'drip'),
-        ('Drip SilentAim PC', 60, 30, 6.99, 'drip'),
-        ('Gbox IOS Signer', 45, 7, 5.49, 'standard'),
-        ('Hg Cheat ApkMod', 35, 15, 4.49, 'hg'),
-        ('Prime Apkmod', 55, 30, 6.49, 'standard'),
-        ('GlitchShotx 8BP IOS', 70, 7, 7.99, 'standard'),
-        ('Brmod SilentAim PC', 65, 30, 7.49, 'brmod'),
-        ('Brmod Bypass + Silent', 80, 30, 8.99, 'brmod'),
-        ('Gbox Esign Cert', 90, 15, 9.99, 'standard'),
-        ('Pato Blue ApkMod', 25, 7, 2.99, 'standard'),
-        ('Drip Root Android', 50, 30, 5.99, 'drip'),
-        ('LKTEAM Root + PC', 75, 30, 8.49, 'lkteam'),
-        ('Pato Orange ApkMod', 40, 15, 4.99, 'standard'),
-        ('Pato Green ApkMod', 45, 15, 5.49, 'standard'),
-        ('Strict Br Root', 60, 30, 6.99, 'standard'),
-        ('Shield Pubg Android', 55, 30, 6.49, 'standard'),
-        ('Haxxcker Pro Root', 85, 30, 9.49, 'standard'),
-        ('Spotify Root', 20, 30, 2.49, 'spotify')
+        ('Fluorite FF IOS', 10, 20, 'fluorite'),  # 10 credits per day, ₹20 per day
+        ('Drip Android ApkMod', 5, 10, 'drip'),
+        ('Drip Aimkill PC', 6, 12, 'drip'),
+        ('Drip SilentAim PC', 8, 15, 'drip'),
+        ('Gbox IOS Signer', 12, 25, 'gbox'),
+        ('Hg Cheat ApkMod', 7, 14, 'hg'),
+        ('Prime Apkmod', 9, 18, 'standard'),
+        ('GlitchShotx 8BP IOS', 15, 30, 'gbox'),
+        ('Brmod SilentAim PC', 10, 20, 'brmod'),
+        ('Brmod Bypass + Silent', 12, 25, 'brmod'),
+        ('Gbox Esign Cert', 20, 40, 'gbox'),
+        ('Pato Blue ApkMod', 5, 10, 'standard'),
+        ('Drip Root Android', 8, 16, 'drip'),
+        ('LKTEAM Root + PC', 12, 25, 'lkteam'),
+        ('Pato Orange ApkMod', 7, 14, 'standard'),
+        ('Pato Green ApkMod', 8, 16, 'standard'),
+        ('Strict Br Root', 10, 20, 'strict'),
+        ('Shield Pubg Android', 9, 18, 'standard'),
+        ('Haxxcker Pro Root', 12, 25, 'standard'),
+        ('Spotify Root', 4, 8, 'spotify')
     ]
     
     for product in default_products:
         try:
-            c.execute("INSERT INTO products (name, credit_cost, days, price, key_type) VALUES (?, ?, ?, ?, ?)",
+            c.execute("INSERT INTO products (name, credit_cost_per_day, price_per_day, key_type) VALUES (?, ?, ?, ?)",
                      product)
         except sqlite3.IntegrityError:
             pass
@@ -105,7 +111,6 @@ UPI_NAME = "Digamber"
 
 def generate_upi_qr(amount):
     """Generate UPI QR code"""
-    # UPI deep link format: upi://pay?pa=user@upi&pn=Receiver&am=amount&cu=INR
     upi_url = f"upi://pay?pa={UPI_ID}&pn={UPI_NAME}&am={amount}&cu=INR"
     
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
@@ -114,7 +119,6 @@ def generate_upi_qr(amount):
     
     img = qr.make_image(fill_color="black", back_color="white")
     
-    # Convert to base64 for embedding in HTML
     buffered = BytesIO()
     img.save(buffered, format="PNG")
     img_str = base64.b64encode(buffered.getvalue()).decode()
@@ -124,6 +128,11 @@ def generate_upi_qr(amount):
 # Key generation functions for different products
 def generate_fluorite_key():
     """Generate Fluorite style key (16 chars alphanumeric)"""
+    alphabet = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(16))
+
+def generate_gbox_key():
+    """Generate Gbox style key (same as fluorite)"""
     alphabet = string.ascii_uppercase + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(16))
 
@@ -149,6 +158,11 @@ def generate_lkteam_key():
     random_part = ''.join(secrets.choice(alphabet) for _ in range(6))
     return f"LKTEAM-{random_part}"
 
+def generate_strict_key():
+    """Generate Strict Br Root key (STRICT-8 digits)"""
+    digits = ''.join(secrets.choice(string.digits) for _ in range(8))
+    return f"STRICT-{digits}"
+
 def generate_spotify_credentials():
     """Generate Spotify style credentials"""
     username = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
@@ -157,27 +171,21 @@ def generate_spotify_credentials():
 
 def generate_key_by_type(key_type):
     """Generate key based on product type"""
-    if key_type == 'fluorite':
-        return generate_fluorite_key()
-    elif key_type == 'drip':
-        return generate_drip_key()
-    elif key_type == 'hg':
-        return generate_hg_key()
-    elif key_type == 'brmod':
-        return generate_brmod_credentials()
-    elif key_type == 'lkteam':
-        return generate_lkteam_key()
-    elif key_type == 'spotify':
-        return generate_spotify_credentials()
-    else:
-        # Standard key format
-        alphabet = string.ascii_uppercase + string.digits
-        return 'KEY-' + ''.join(secrets.choice(alphabet) for _ in range(4)) + '-' + \
-               ''.join(secrets.choice(alphabet) for _ in range(4)) + '-' + \
-               ''.join(secrets.choice(alphabet) for _ in range(4))
+    key_types = {
+        'fluorite': generate_fluorite_key,
+        'gbox': generate_gbox_key,
+        'drip': generate_drip_key,
+        'hg': generate_hg_key,
+        'brmod': generate_brmod_credentials,
+        'lkteam': generate_lkteam_key,
+        'strict': generate_strict_key,
+        'spotify': generate_spotify_credentials
+    }
+    
+    generator = key_types.get(key_type, generate_fluorite_key)
+    return generator()
 
-# Routes (keep all existing routes and add new ones)
-
+# Routes
 @app.route('/')
 def index():
     if 'username' in session:
@@ -296,12 +304,37 @@ def admin_dashboard():
     return render_template('admin.html', users=users, payments=payments, 
                          licenses=licenses, products=products)
 
+@app.route('/calculate_price', methods=['POST'])
+def calculate_price():
+    """Calculate total price and credits for selected days"""
+    product_id = request.json.get('product_id')
+    days = int(request.json.get('days'))
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+    product = c.fetchone()
+    conn.close()
+    
+    if not product:
+        return jsonify({'success': False})
+    
+    total_credits = product[2] * days  # credit_cost_per_day * days
+    total_price = product[3] * days  # price_per_day * days
+    
+    return jsonify({
+        'success': True,
+        'total_credits': total_credits,
+        'total_price': total_price
+    })
+
 @app.route('/generate_key', methods=['POST'])
 def generate_key_route():
     if 'username' not in session:
         return jsonify({'success': False, 'error': 'Not logged in'})
     
     product_id = request.json.get('product_id')
+    days = int(request.json.get('days'))
     
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
@@ -314,34 +347,38 @@ def generate_key_route():
         conn.close()
         return jsonify({'success': False, 'error': 'Product not found'})
     
+    # Calculate total credits needed
+    total_credits = product[2] * days  # credit_cost_per_day * days
+    
     # Get user credits
     c.execute("SELECT credits FROM users WHERE username = ?", (session['username'],))
     credits = c.fetchone()[0]
     
-    if credits < product[2]:  # product[2] is credit_cost
+    if credits < total_credits:
         conn.close()
-        return jsonify({'success': False, 'error': 'Insufficient credits'})
+        return jsonify({'success': False, 'error': f'Insufficient credits. Need {total_credits} credits'})
     
     # Generate key based on product type
-    key = generate_key_by_type(product[5])  # product[5] is key_type
+    key = generate_key_by_type(product[4])  # product[4] is key_type
     
     # Calculate expiry date based on days
-    expiry_date = datetime.now() + timedelta(days=product[3])  # product[3] is days
+    expiry_date = datetime.now() + timedelta(days=days)
     
     # Deduct credits
     c.execute("UPDATE users SET credits = credits - ? WHERE username = ?",
-             (product[2], session['username']))
+             (total_credits, session['username']))
     
     # Save license
-    c.execute("""INSERT INTO licenses (key, username, product_name, expiry_date, status)
-                 VALUES (?, ?, ?, ?, ?)""",
-             (key, session['username'], product[1], expiry_date.strftime('%Y-%m-%d %H:%M:%S'), 'active'))
+    c.execute("""INSERT INTO licenses (key, username, product_name, days, total_credits, expiry_date, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)""",
+             (key, session['username'], product[1], days, total_credits, 
+              expiry_date.strftime('%Y-%m-%d %H:%M:%S'), 'active'))
     
     conn.commit()
     conn.close()
     
     # Update session credits
-    session['credits'] -= product[2]
+    session['credits'] -= total_credits
     
     return jsonify({'success': True, 'key': key})
 
@@ -416,6 +453,9 @@ def payment():
         utr = request.form['utr']
         amount = float(request.form['amount'])
         
+        # Calculate credits to add (₹1 = 0.5 credits)
+        credits_to_add = amount * CREDIT_RATE
+        
         # Generate QR code for the amount
         qr_code = generate_upi_qr(amount)
         
@@ -423,12 +463,20 @@ def payment():
         c = conn.cursor()
         
         try:
-            c.execute("""INSERT INTO payments (username, utr, amount, status, date)
-                         VALUES (?, ?, ?, ?, ?)""",
-                     (session['username'], utr, amount, 'pending', datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+            c.execute("""INSERT INTO payments (username, utr, amount, credits_added, status, date)
+                         VALUES (?, ?, ?, ?, ?, ?)""",
+                     (session['username'], utr, amount, credits_to_add, 'pending', 
+                      datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
             conn.commit()
+            
+            # Auto-approve for testing (remove in production)
+            # c.execute("UPDATE payments SET status = 'approved' WHERE utr = ?", (utr,))
+            # c.execute("UPDATE users SET credits = credits + ? WHERE username = ?",
+            #          (credits_to_add, session['username']))
+            # conn.commit()
+            
             conn.close()
-            return render_template('payment.html', success='Payment request submitted successfully', qr_code=qr_code, amount=amount)
+            return render_template('payment.html', success=f'Payment request submitted! You will get {credits_to_add} credits after approval.', qr_code=qr_code, amount=amount)
         except sqlite3.IntegrityError:
             conn.close()
             return render_template('payment.html', error='UTR already exists')
@@ -452,10 +500,14 @@ def approve_payment():
     
     if payment:
         # Update payment status
-        c.execute("UPDATE payments SET status = 'approved' WHERE id = ?", (payment_id,))
+        c.execute("""UPDATE payments SET status = 'approved', approved_date = ? 
+                     WHERE id = ?""", 
+                 (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), payment_id))
+        
         # Add credits to user
         c.execute("UPDATE users SET credits = credits + ? WHERE username = ?",
-                 (payment[3], payment[1]))  # payment[3] is amount, payment[1] is username
+                 (payment[4], payment[1]))  # payment[4] is credits_added, payment[1] is username
+        
         conn.commit()
         conn.close()
         return jsonify({'success': True})
@@ -463,13 +515,28 @@ def approve_payment():
     conn.close()
     return jsonify({'success': False})
 
+@app.route('/admin/reject_payment', methods=['POST'])
+def reject_payment():
+    if 'username' not in session or session['role'] != 'admin':
+        return jsonify({'success': False})
+    
+    payment_id = request.json.get('payment_id')
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    c.execute("UPDATE payments SET status = 'rejected' WHERE id = ?", (payment_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
+
 @app.route('/admin/add_credits', methods=['POST'])
 def add_credits():
     if 'username' not in session or session['role'] != 'admin':
         return jsonify({'success': False})
     
     username = request.json.get('username')
-    credits = int(request.json.get('credits'))
+    credits = float(request.json.get('credits'))
     
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
@@ -501,17 +568,16 @@ def add_product():
         return jsonify({'success': False})
     
     name = request.json.get('name')
-    credit_cost = int(request.json.get('credit_cost'))
-    days = int(request.json.get('days'))
-    price = float(request.json.get('price'))
+    credit_cost_per_day = float(request.json.get('credit_cost_per_day'))
+    price_per_day = float(request.json.get('price_per_day'))
     key_type = request.json.get('key_type', 'standard')
     
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
     
     try:
-        c.execute("""INSERT INTO products (name, credit_cost, days, price, key_type)
-                     VALUES (?, ?, ?, ?, ?)""", (name, credit_cost, days, price, key_type))
+        c.execute("""INSERT INTO products (name, credit_cost_per_day, price_per_day, key_type)
+                     VALUES (?, ?, ?, ?)""", (name, credit_cost_per_day, price_per_day, key_type))
         conn.commit()
         conn.close()
         return jsonify({'success': True})
@@ -526,15 +592,14 @@ def edit_product():
     
     product_id = request.json.get('product_id')
     name = request.json.get('name')
-    credit_cost = int(request.json.get('credit_cost'))
-    days = int(request.json.get('days'))
-    price = float(request.json.get('price'))
+    credit_cost_per_day = float(request.json.get('credit_cost_per_day'))
+    price_per_day = float(request.json.get('price_per_day'))
     key_type = request.json.get('key_type', 'standard')
     
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
-    c.execute("""UPDATE products SET name = ?, credit_cost = ?, days = ?, price = ?, key_type = ?
-                 WHERE id = ?""", (name, credit_cost, days, price, key_type, product_id))
+    c.execute("""UPDATE products SET name = ?, credit_cost_per_day = ?, price_per_day = ?, key_type = ?
+                 WHERE id = ?""", (name, credit_cost_per_day, price_per_day, key_type, product_id))
     conn.commit()
     conn.close()
     
