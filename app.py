@@ -3,8 +3,12 @@ from flask_bcrypt import Bcrypt
 import sqlite3
 import secrets
 import string
+import random
 from datetime import datetime, timedelta
 import os
+import qrcode
+from io import BytesIO
+import base64
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
@@ -23,13 +27,14 @@ def init_db():
                   role TEXT DEFAULT 'user',
                   credits INTEGER DEFAULT 0)''')
     
-    # Create products table
+    # Create products table with days dropdown
     c.execute('''CREATE TABLE IF NOT EXISTS products
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   name TEXT UNIQUE NOT NULL,
                   credit_cost INTEGER NOT NULL,
-                  duration TEXT NOT NULL,
-                  price REAL NOT NULL)''')
+                  days INTEGER NOT NULL,
+                  price REAL NOT NULL,
+                  key_type TEXT DEFAULT 'standard')''')
     
     # Create licenses table
     c.execute('''CREATE TABLE IF NOT EXISTS licenses
@@ -37,8 +42,10 @@ def init_db():
                   key TEXT UNIQUE NOT NULL,
                   username TEXT NOT NULL,
                   product_name TEXT NOT NULL,
+                  hwid TEXT,
                   expiry_date TEXT NOT NULL,
-                  status TEXT DEFAULT 'active')''')
+                  status TEXT DEFAULT 'active',
+                  last_reset TEXT)''')
     
     # Create payments table
     c.execute('''CREATE TABLE IF NOT EXISTS payments
@@ -56,33 +63,33 @@ def init_db():
         c.execute("INSERT INTO users (username, password, role, credits) VALUES (?, ?, ?, ?)",
                   ('admin', hashed_password, 'admin', 1000))
     
-    # Insert default products if not exists
+    # Insert default products with days
     default_products = [
-        ('Fluorite FF IOS', 50, '7 days', 5.99),
-        ('Drip Android ApkMod', 30, '15 days', 3.99),
-        ('Drip Aimkill PC', 40, '30 days', 4.99),
-        ('Drip SilentAim PC', 60, '30 days', 6.99),
-        ('Gbox IOS Signer', 45, '7 days', 5.49),
-        ('Hg Cheat ApkMod', 35, '15 days', 4.49),
-        ('Prime Apkmod', 55, '30 days', 6.49),
-        ('GlitchShotx 8BP IOS', 70, '7 days', 7.99),
-        ('Brmod SilentAim PC', 65, '30 days', 7.49),
-        ('Brmod Bypass + Silent', 80, '30 days', 8.99),
-        ('Gbox Esign Cert', 90, '15 days', 9.99),
-        ('Pato Blue ApkMod', 25, '7 days', 2.99),
-        ('Drip Root Android', 50, '30 days', 5.99),
-        ('LKTEAM Root + PC', 75, '30 days', 8.49),
-        ('Pato Orange ApkMod', 40, '15 days', 4.99),
-        ('Pato Green ApkMod', 45, '15 days', 5.49),
-        ('Strict Br Root', 60, '30 days', 6.99),
-        ('Shield Pubg Android', 55, '30 days', 6.49),
-        ('Haxxcker Pro Root', 85, '30 days', 9.49),
-        ('Spotify Root', 20, '30 days', 2.49)
+        ('Fluorite FF IOS', 50, 7, 5.99, 'fluorite'),
+        ('Drip Android ApkMod', 30, 15, 3.99, 'drip'),
+        ('Drip Aimkill PC', 40, 30, 4.99, 'drip'),
+        ('Drip SilentAim PC', 60, 30, 6.99, 'drip'),
+        ('Gbox IOS Signer', 45, 7, 5.49, 'standard'),
+        ('Hg Cheat ApkMod', 35, 15, 4.49, 'hg'),
+        ('Prime Apkmod', 55, 30, 6.49, 'standard'),
+        ('GlitchShotx 8BP IOS', 70, 7, 7.99, 'standard'),
+        ('Brmod SilentAim PC', 65, 30, 7.49, 'brmod'),
+        ('Brmod Bypass + Silent', 80, 30, 8.99, 'brmod'),
+        ('Gbox Esign Cert', 90, 15, 9.99, 'standard'),
+        ('Pato Blue ApkMod', 25, 7, 2.99, 'standard'),
+        ('Drip Root Android', 50, 30, 5.99, 'drip'),
+        ('LKTEAM Root + PC', 75, 30, 8.49, 'lkteam'),
+        ('Pato Orange ApkMod', 40, 15, 4.99, 'standard'),
+        ('Pato Green ApkMod', 45, 15, 5.49, 'standard'),
+        ('Strict Br Root', 60, 30, 6.99, 'standard'),
+        ('Shield Pubg Android', 55, 30, 6.49, 'standard'),
+        ('Haxxcker Pro Root', 85, 30, 9.49, 'standard'),
+        ('Spotify Root', 20, 30, 2.49, 'spotify')
     ]
     
     for product in default_products:
         try:
-            c.execute("INSERT INTO products (name, credit_cost, duration, price) VALUES (?, ?, ?, ?)",
+            c.execute("INSERT INTO products (name, credit_cost, days, price, key_type) VALUES (?, ?, ?, ?, ?)",
                      product)
         except sqlite3.IntegrityError:
             pass
@@ -92,14 +99,85 @@ def init_db():
 
 init_db()
 
-# Helper function to generate key
-def generate_key():
-    alphabet = string.ascii_uppercase + string.digits
-    return 'KEY-' + ''.join(secrets.choice(alphabet) for _ in range(4)) + '-' + \
-           ''.join(secrets.choice(alphabet) for _ in range(4)) + '-' + \
-           ''.join(secrets.choice(alphabet) for _ in range(4))
+# UPI ID for QR Code
+UPI_ID = "thedigamber@fam"
+UPI_NAME = "Digamber"
 
-# Routes
+def generate_upi_qr(amount):
+    """Generate UPI QR code"""
+    # UPI deep link format: upi://pay?pa=user@upi&pn=Receiver&am=amount&cu=INR
+    upi_url = f"upi://pay?pa={UPI_ID}&pn={UPI_NAME}&am={amount}&cu=INR"
+    
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(upi_url)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Convert to base64 for embedding in HTML
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    
+    return img_str
+
+# Key generation functions for different products
+def generate_fluorite_key():
+    """Generate Fluorite style key (16 chars alphanumeric)"""
+    alphabet = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(16))
+
+def generate_drip_key():
+    """Generate Drip style key (10 digits)"""
+    return ''.join(secrets.choice(string.digits) for _ in range(10))
+
+def generate_hg_key():
+    """Generate HG Cheat style key"""
+    alphabet = string.ascii_uppercase + string.digits
+    random_part = ''.join(secrets.choice(alphabet) for _ in range(6))
+    return f"HG-{random_part}"
+
+def generate_brmod_credentials():
+    """Generate BRMod username and password"""
+    username = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+    password = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(4))
+    return f"User: {username}\nPass: {password}"
+
+def generate_lkteam_key():
+    """Generate LKTEAM style key"""
+    alphabet = string.ascii_uppercase + string.digits
+    random_part = ''.join(secrets.choice(alphabet) for _ in range(6))
+    return f"LKTEAM-{random_part}"
+
+def generate_spotify_credentials():
+    """Generate Spotify style credentials"""
+    username = ''.join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+    password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+    return f"Username: {username}@temp.com\nPassword: {password}"
+
+def generate_key_by_type(key_type):
+    """Generate key based on product type"""
+    if key_type == 'fluorite':
+        return generate_fluorite_key()
+    elif key_type == 'drip':
+        return generate_drip_key()
+    elif key_type == 'hg':
+        return generate_hg_key()
+    elif key_type == 'brmod':
+        return generate_brmod_credentials()
+    elif key_type == 'lkteam':
+        return generate_lkteam_key()
+    elif key_type == 'spotify':
+        return generate_spotify_credentials()
+    else:
+        # Standard key format
+        alphabet = string.ascii_uppercase + string.digits
+        return 'KEY-' + ''.join(secrets.choice(alphabet) for _ in range(4)) + '-' + \
+               ''.join(secrets.choice(alphabet) for _ in range(4)) + '-' + \
+               ''.join(secrets.choice(alphabet) for _ in range(4))
+
+# Routes (keep all existing routes and add new ones)
+
 @app.route('/')
 def index():
     if 'username' in session:
@@ -244,9 +322,11 @@ def generate_key_route():
         conn.close()
         return jsonify({'success': False, 'error': 'Insufficient credits'})
     
-    # Generate key
-    key = generate_key()
-    expiry_date = datetime.now() + timedelta(days=int(product[3].split()[0]))
+    # Generate key based on product type
+    key = generate_key_by_type(product[5])  # product[5] is key_type
+    
+    # Calculate expiry date based on days
+    expiry_date = datetime.now() + timedelta(days=product[3])  # product[3] is days
     
     # Deduct credits
     c.execute("UPDATE users SET credits = credits - ? WHERE username = ?",
@@ -265,6 +345,68 @@ def generate_key_route():
     
     return jsonify({'success': True, 'key': key})
 
+@app.route('/hwid_reset', methods=['POST'])
+def hwid_reset():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    license_id = request.json.get('license_id')
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    
+    # Check if license belongs to user
+    c.execute("SELECT * FROM licenses WHERE id = ? AND username = ?", 
+             (license_id, session['username']))
+    license = c.fetchone()
+    
+    if not license:
+        conn.close()
+        return jsonify({'success': False, 'error': 'License not found'})
+    
+    # Update HWID reset timestamp
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    c.execute("UPDATE licenses SET last_reset = ? WHERE id = ?", 
+             (current_time, license_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'HWID reset successful'})
+
+@app.route('/hwid_reset_all', methods=['POST'])
+def hwid_reset_all():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    
+    # Update all user's licenses
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    c.execute("UPDATE licenses SET last_reset = ? WHERE username = ?", 
+             (current_time, session['username']))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'All HWIDs reset successfully'})
+
+@app.route('/admin/delete_key', methods=['POST'])
+def delete_key():
+    if 'username' not in session or session['role'] != 'admin':
+        return jsonify({'success': False})
+    
+    license_id = request.json.get('license_id')
+    
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM licenses WHERE id = ?", (license_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
+
 @app.route('/payment', methods=['GET', 'POST'])
 def payment():
     if 'username' not in session:
@@ -273,6 +415,9 @@ def payment():
     if request.method == 'POST':
         utr = request.form['utr']
         amount = float(request.form['amount'])
+        
+        # Generate QR code for the amount
+        qr_code = generate_upi_qr(amount)
         
         conn = sqlite3.connect('database.db')
         c = conn.cursor()
@@ -283,7 +428,7 @@ def payment():
                      (session['username'], utr, amount, 'pending', datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
             conn.commit()
             conn.close()
-            return render_template('payment.html', success='Payment request submitted successfully')
+            return render_template('payment.html', success='Payment request submitted successfully', qr_code=qr_code, amount=amount)
         except sqlite3.IntegrityError:
             conn.close()
             return render_template('payment.html', error='UTR already exists')
@@ -357,15 +502,16 @@ def add_product():
     
     name = request.json.get('name')
     credit_cost = int(request.json.get('credit_cost'))
-    duration = request.json.get('duration')
+    days = int(request.json.get('days'))
     price = float(request.json.get('price'))
+    key_type = request.json.get('key_type', 'standard')
     
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
     
     try:
-        c.execute("""INSERT INTO products (name, credit_cost, duration, price)
-                     VALUES (?, ?, ?, ?)""", (name, credit_cost, duration, price))
+        c.execute("""INSERT INTO products (name, credit_cost, days, price, key_type)
+                     VALUES (?, ?, ?, ?, ?)""", (name, credit_cost, days, price, key_type))
         conn.commit()
         conn.close()
         return jsonify({'success': True})
@@ -381,13 +527,14 @@ def edit_product():
     product_id = request.json.get('product_id')
     name = request.json.get('name')
     credit_cost = int(request.json.get('credit_cost'))
-    duration = request.json.get('duration')
+    days = int(request.json.get('days'))
     price = float(request.json.get('price'))
+    key_type = request.json.get('key_type', 'standard')
     
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
-    c.execute("""UPDATE products SET name = ?, credit_cost = ?, duration = ?, price = ?
-                 WHERE id = ?""", (name, credit_cost, duration, price, product_id))
+    c.execute("""UPDATE products SET name = ?, credit_cost = ?, days = ?, price = ?, key_type = ?
+                 WHERE id = ?""", (name, credit_cost, days, price, key_type, product_id))
     conn.commit()
     conn.close()
     
