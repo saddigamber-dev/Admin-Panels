@@ -14,9 +14,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const selectedOption = this.options[this.selectedIndex];
             if (this.value) {
                 const cost = selectedOption.dataset.cost;
-                const duration = selectedOption.dataset.duration;
+                const days = selectedOption.dataset.days;
                 productCost.textContent = cost;
-                productDuration.textContent = duration;
+                productDuration.textContent = days;
                 productDetails.style.display = 'block';
                 generateBtn.disabled = false;
             } else {
@@ -58,6 +58,65 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }
+
+    // HWID Reset handlers
+    const hwidResetAll = document.getElementById('hwid-reset-all');
+    
+    if (hwidResetAll) {
+        hwidResetAll.addEventListener('click', function() {
+            if (!confirm('Are you sure you want to reset HWID for all your licenses?')) return;
+            
+            fetch('/hwid_reset_all', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('All HWIDs reset successfully');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            });
+        });
+    }
+
+    // Individual HWID Reset
+    document.querySelectorAll('.btn-hwid-reset').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Reset HWID for this license?')) return;
+            
+            const licenseId = this.dataset.licenseId;
+            
+            fetch('/hwid_reset', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ license_id: licenseId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('HWID reset successful');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            });
+        });
+    });
 
     // Admin Dashboard Scripts
     const tabs = document.querySelectorAll('.tab-btn');
@@ -105,8 +164,9 @@ document.addEventListener('DOMContentLoaded', function() {
         saveProductBtn.addEventListener('click', function() {
             const name = document.getElementById('new-product-name').value;
             const credit_cost = document.getElementById('new-product-cost').value;
-            const duration = document.getElementById('new-product-duration').value;
+            const days = document.getElementById('new-product-days').value;
             const price = document.getElementById('new-product-price').value;
+            const key_type = document.getElementById('new-product-keytype').value;
 
             if (!name || !credit_cost || !price) {
                 alert('Please fill all fields');
@@ -121,8 +181,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     name: name,
                     credit_cost: credit_cost,
-                    duration: duration,
-                    price: price
+                    days: days,
+                    price: price,
+                    key_type: key_type
                 })
             })
             .then(response => response.json())
@@ -146,8 +207,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const editProductId = document.getElementById('edit-product-id');
     const editProductName = document.getElementById('edit-product-name');
     const editProductCost = document.getElementById('edit-product-cost');
-    const editProductDuration = document.getElementById('edit-product-duration');
+    const editProductDays = document.getElementById('edit-product-days');
     const editProductPrice = document.getElementById('edit-product-price');
+    const editProductKeyType = document.getElementById('edit-product-keytype');
     const updateProductBtn = document.getElementById('update-product');
     const closeModalBtn = document.getElementById('close-modal');
 
@@ -161,15 +223,23 @@ document.addEventListener('DOMContentLoaded', function() {
             editProductName.value = cells[0].textContent;
             editProductCost.value = cells[1].textContent;
             
-            // Handle duration dropdown
-            const duration = cells[2].textContent;
-            Array.from(editProductDuration.options).forEach(option => {
-                if (option.value === duration) {
+            // Handle days dropdown
+            const days = cells[2].textContent.replace(' days', '');
+            Array.from(editProductDays.options).forEach(option => {
+                if (option.value === days) {
                     option.selected = true;
                 }
             });
             
-            editProductPrice.value = cells[3].textContent.replace('$', '');
+            editProductPrice.value = cells[3].textContent.replace('₹', '');
+            
+            // Handle key type dropdown
+            const keyType = cells[4].textContent;
+            Array.from(editProductKeyType.options).forEach(option => {
+                if (option.value === keyType) {
+                    option.selected = true;
+                }
+            });
             
             editProductModal.style.display = 'flex';
         });
@@ -180,8 +250,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const productId = editProductId.value;
             const name = editProductName.value;
             const credit_cost = editProductCost.value;
-            const duration = editProductDuration.value;
+            const days = editProductDays.value;
             const price = editProductPrice.value;
+            const key_type = editProductKeyType.value;
 
             fetch('/admin/edit_product', {
                 method: 'POST',
@@ -192,8 +263,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     product_id: productId,
                     name: name,
                     credit_cost: credit_cost,
-                    duration: duration,
-                    price: price
+                    days: days,
+                    price: price,
+                    key_type: key_type
                 })
             })
             .then(response => response.json())
@@ -357,6 +429,36 @@ document.addEventListener('DOMContentLoaded', function() {
                     location.reload();
                 } else {
                     alert('Failed to delete user');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            });
+        });
+    });
+
+    // Delete Key (Admin)
+    document.querySelectorAll('.btn-delete-key').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Are you sure you want to delete this key?')) return;
+            
+            const licenseId = this.dataset.licenseId;
+            
+            fetch('/admin/delete_key', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ license_id: licenseId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Key deleted successfully');
+                    location.reload();
+                } else {
+                    alert('Failed to delete key');
                 }
             })
             .catch(error => {
