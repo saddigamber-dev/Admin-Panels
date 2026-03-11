@@ -2,41 +2,86 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Product selection handler
     const productSelect = document.getElementById('product-select');
+    const daysSelection = document.getElementById('days-selection');
+    const daysSelect = document.getElementById('days-select');
     const productDetails = document.getElementById('product-details');
-    const productCost = document.getElementById('product-cost');
-    const productDuration = document.getElementById('product-duration');
+    const costPerDay = document.getElementById('cost-per-day');
+    const pricePerDay = document.getElementById('price-per-day');
+    const totalCredits = document.getElementById('total-credits');
+    const totalPrice = document.getElementById('total-price');
     const generateBtn = document.getElementById('generate-key');
     const generatedKeyDiv = document.getElementById('generated-key');
     const keyDisplay = document.querySelector('.key-display');
+
+    let currentProduct = null;
 
     if (productSelect) {
         productSelect.addEventListener('change', function() {
             const selectedOption = this.options[this.selectedIndex];
             if (this.value) {
-                const cost = selectedOption.dataset.cost;
-                const days = selectedOption.dataset.days;
-                productCost.textContent = cost;
-                productDuration.textContent = days;
-                productDetails.style.display = 'block';
-                generateBtn.disabled = false;
+                currentProduct = {
+                    id: this.value,
+                    cost: selectedOption.dataset.cost,
+                    price: selectedOption.dataset.price,
+                    type: selectedOption.dataset.type
+                };
+                
+                costPerDay.textContent = currentProduct.cost;
+                pricePerDay.textContent = currentProduct.price;
+                
+                // Show days selection
+                daysSelection.style.display = 'block';
+                
+                // Trigger initial calculation
+                updatePriceAndCredits();
             } else {
+                daysSelection.style.display = 'none';
                 productDetails.style.display = 'none';
                 generateBtn.disabled = true;
+                currentProduct = null;
             }
         });
+    }
+
+    // Days selection handler
+    if (daysSelect) {
+        daysSelect.addEventListener('change', updatePriceAndCredits);
+    }
+
+    function updatePriceAndCredits() {
+        if (!currentProduct) return;
+        
+        const days = parseInt(daysSelect.value);
+        const totalCreditsValue = currentProduct.cost * days;
+        const totalPriceValue = currentProduct.price * days;
+        
+        totalCredits.textContent = totalCreditsValue;
+        totalPrice.textContent = totalPriceValue;
+        
+        productDetails.style.display = 'block';
+        generateBtn.disabled = false;
     }
 
     // Generate key handler
     if (generateBtn) {
         generateBtn.addEventListener('click', function() {
-            const productId = productSelect.value;
+            if (!currentProduct) return;
+            
+            const days = daysSelect.value;
+            
+            // Disable button to prevent double click
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating...';
             
             fetch('/generate_key', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ product_id: productId })
+                body: JSON.stringify({ 
+                    product_id: currentProduct.id,
+                    days: days
+                })
             })
             .then(response => response.json())
             .then(data => {
@@ -44,17 +89,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     keyDisplay.textContent = data.key;
                     generatedKeyDiv.style.display = 'block';
                     
-                    // Refresh the page after 2 seconds to show updated credits and keys
+                    // Show success message
                     setTimeout(() => {
                         location.reload();
-                    }, 2000);
+                    }, 3000);
                 } else {
                     alert('Error: ' + data.error);
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = 'Generate Key';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while generating the key');
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate Key';
             });
         });
     }
@@ -127,11 +176,9 @@ document.addEventListener('DOMContentLoaded', function() {
             tab.addEventListener('click', function() {
                 const tabName = this.dataset.tab;
                 
-                // Remove active class from all tabs and contents
                 tabs.forEach(t => t.classList.remove('active'));
                 tabContents.forEach(c => c.classList.remove('active'));
                 
-                // Add active class to current tab and content
                 this.classList.add('active');
                 document.getElementById(tabName + '-tab').classList.add('active');
             });
@@ -153,9 +200,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (cancelProductBtn) {
         cancelProductBtn.addEventListener('click', function() {
             addProductForm.style.display = 'none';
-            // Clear form
             document.getElementById('new-product-name').value = '';
-            document.getElementById('new-product-cost').value = '';
+            document.getElementById('new-product-credits').value = '';
             document.getElementById('new-product-price').value = '';
         });
     }
@@ -163,12 +209,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (saveProductBtn) {
         saveProductBtn.addEventListener('click', function() {
             const name = document.getElementById('new-product-name').value;
-            const credit_cost = document.getElementById('new-product-cost').value;
-            const days = document.getElementById('new-product-days').value;
-            const price = document.getElementById('new-product-price').value;
+            const credit_cost_per_day = document.getElementById('new-product-credits').value;
+            const price_per_day = document.getElementById('new-product-price').value;
             const key_type = document.getElementById('new-product-keytype').value;
 
-            if (!name || !credit_cost || !price) {
+            if (!name || !credit_cost_per_day || !price_per_day) {
                 alert('Please fill all fields');
                 return;
             }
@@ -180,9 +225,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     name: name,
-                    credit_cost: credit_cost,
-                    days: days,
-                    price: price,
+                    credit_cost_per_day: credit_cost_per_day,
+                    price_per_day: price_per_day,
                     key_type: key_type
                 })
             })
@@ -206,8 +250,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const editProductModal = document.getElementById('edit-product-modal');
     const editProductId = document.getElementById('edit-product-id');
     const editProductName = document.getElementById('edit-product-name');
-    const editProductCost = document.getElementById('edit-product-cost');
-    const editProductDays = document.getElementById('edit-product-days');
+    const editProductCredits = document.getElementById('edit-product-credits');
     const editProductPrice = document.getElementById('edit-product-price');
     const editProductKeyType = document.getElementById('edit-product-keytype');
     const updateProductBtn = document.getElementById('update-product');
@@ -221,20 +264,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
             editProductId.value = productId;
             editProductName.value = cells[0].textContent;
-            editProductCost.value = cells[1].textContent;
+            editProductCredits.value = cells[1].textContent;
+            editProductPrice.value = cells[2].textContent.replace('₹', '');
             
-            // Handle days dropdown
-            const days = cells[2].textContent.replace(' days', '');
-            Array.from(editProductDays.options).forEach(option => {
-                if (option.value === days) {
-                    option.selected = true;
-                }
-            });
-            
-            editProductPrice.value = cells[3].textContent.replace('₹', '');
-            
-            // Handle key type dropdown
-            const keyType = cells[4].textContent;
+            const keyType = cells[3].textContent.trim();
             Array.from(editProductKeyType.options).forEach(option => {
                 if (option.value === keyType) {
                     option.selected = true;
@@ -249,9 +282,8 @@ document.addEventListener('DOMContentLoaded', function() {
         updateProductBtn.addEventListener('click', function() {
             const productId = editProductId.value;
             const name = editProductName.value;
-            const credit_cost = editProductCost.value;
-            const days = editProductDays.value;
-            const price = editProductPrice.value;
+            const credit_cost_per_day = editProductCredits.value;
+            const price_per_day = editProductPrice.value;
             const key_type = editProductKeyType.value;
 
             fetch('/admin/edit_product', {
@@ -262,9 +294,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     product_id: productId,
                     name: name,
-                    credit_cost: credit_cost,
-                    days: days,
-                    price: price,
+                    credit_cost_per_day: credit_cost_per_day,
+                    price_per_day: price_per_day,
                     key_type: key_type
                 })
             })
@@ -337,10 +368,40 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Payment approved successfully');
+                    alert('Payment approved successfully! Credits added to user.');
                     location.reload();
                 } else {
                     alert('Failed to approve payment');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+            });
+        });
+    });
+
+    // Reject Payment
+    document.querySelectorAll('.btn-reject-payment').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Reject this payment?')) return;
+            
+            const paymentId = this.dataset.paymentId;
+            
+            fetch('/admin/reject_payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ payment_id: paymentId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Payment rejected');
+                    location.reload();
+                } else {
+                    alert('Failed to reject payment');
                 }
             })
             .catch(error => {
