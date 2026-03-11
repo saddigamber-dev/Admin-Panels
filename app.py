@@ -87,12 +87,13 @@ def init_db():
                       approved_date TEXT,
                       approved_by TEXT)''')
         
-        # Insert default admin if not exists
+        # Insert default admin if not exists - CHANGED HERE
         c.execute("SELECT * FROM users WHERE username = 'thedigamber'")
         if not c.fetchone():
             hashed_password = bcrypt.generate_password_hash('620300').decode('utf-8')
             c.execute("INSERT INTO users (username, password, role, credits) VALUES (?, ?, ?, ?)",
-                      ('admin', hashed_password, 'admin', 10000))
+                      ('thedigamber', hashed_password, 'admin', 10000))
+            print("✅ Admin user created: thedigamber / 620300")
         
         # Insert default products
         default_products = [
