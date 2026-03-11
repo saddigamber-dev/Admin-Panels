@@ -16,30 +16,10 @@
     </nav>
 
     <div class="container">
-        <!-- Stats Cards -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <h3>Total Users</h3>
-                <div class="stat-value">{{ total_users }}</div>
-            </div>
-            <div class="stat-card">
-                <h3>Pending Payments</h3>
-                <div class="stat-value">{{ pending_payments }}</div>
-            </div>
-            <div class="stat-card">
-                <h3>Active Keys</h3>
-                <div class="stat-value">{{ active_keys }}</div>
-            </div>
-            <div class="stat-card">
-                <h3>Total Revenue</h3>
-                <div class="stat-value">₹{{ total_revenue }}</div>
-            </div>
-        </div>
-
         <div class="dashboard-tabs">
             <button class="tab-btn active" data-tab="users">Users</button>
             <button class="tab-btn" data-tab="payments">Payments</button>
-            <button class="tab-btn" data-tab="licenses">Keys</button>
+            <button class="tab-btn" data-tab="licenses">Licenses</button>
             <button class="tab-btn" data-tab="products">Products</button>
         </div>
 
@@ -53,7 +33,7 @@
                             <tr>
                                 <th>Username</th>
                                 <th>Credits</th>
-                                <th>Joined</th>
+                                <th>Role</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -62,7 +42,7 @@
                             <tr>
                                 <td>{{ user[1] }}</td>
                                 <td>{{ user[4] }}</td>
-                                <td>{{ user[5] }}</td>
+                                <td>{{ user[3] }}</td>
                                 <td>
                                     <button class="btn-small btn-add-credits" data-username="{{ user[1] }}">Add Credits</button>
                                     <button class="btn-small btn-danger btn-delete-user" data-username="{{ user[1] }}">Delete</button>
@@ -83,10 +63,10 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>User</th>
+                                <th>Username</th>
                                 <th>UTR</th>
-                                <th>Amount</th>
-                                <th>Credits</th>
+                                <th>Amount (₹)</th>
+                                <th>Credits to Add</th>
                                 <th>Date</th>
                                 <th>Status</th>
                                 <th>Action</th>
@@ -118,16 +98,17 @@
         <!-- Licenses Tab -->
         <div id="licenses-tab" class="tab-content">
             <div class="card">
-                <h2>All Keys</h2>
+                <h2>All Generated Keys</h2>
                 <div class="table-container">
                     <table>
                         <thead>
                             <tr>
-                                <th>Key</th>
-                                <th>User</th>
+                                <th>Key/Credentials</th>
+                                <th>Username</th>
                                 <th>Product</th>
                                 <th>Days</th>
-                                <th>Expiry</th>
+                                <th>Credits Used</th>
+                                <th>Expiry Date</th>
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
@@ -138,7 +119,8 @@
                                 <td class="key-cell">{{ license[1] }}</td>
                                 <td>{{ license[2] }}</td>
                                 <td>{{ license[3] }}</td>
-                                <td>{{ license[4] }}</td>
+                                <td>{{ license[4] }} days</td>
+                                <td>{{ license[5] }}</td>
                                 <td>{{ license[6] }}</td>
                                 <td><span class="status-badge status-{{ license[7] }}">{{ license[7] }}</span></td>
                                 <td>
@@ -156,7 +138,7 @@
         <div id="products-tab" class="tab-content">
             <div class="card">
                 <h2>Manage Products</h2>
-                <button class="btn-primary" id="add-product-btn">+ Add Product</button>
+                <button class="btn-primary" id="add-product-btn">Add New Product</button>
                 
                 <div id="add-product-form" style="display: none;" class="form-container">
                     <h3>Add New Product</h3>
@@ -169,20 +151,23 @@
                         <input type="number" step="0.5" id="new-product-credits" required>
                     </div>
                     <div class="form-group">
+                        <label>Price per Day (₹):</label>
+                        <input type="number" step="1" id="new-product-price" required>
+                    </div>
+                    <div class="form-group">
                         <label>Key Type:</label>
                         <select id="new-product-keytype">
-                            <option value="standard">Standard</option>
-                            <option value="fluorite">Fluorite</option>
-                            <option value="gbox">Gbox</option>
-                            <option value="drip">Drip</option>
-                            <option value="hg">HG Cheat</option>
-                            <option value="brmod">BRMod</option>
-                            <option value="lkteam">LKTEAM</option>
-                            <option value="strict">Strict</option>
-                            <option value="spotify">Spotify</option>
+                            <option value="fluorite">Fluorite/Gbox (16 chars alphanumeric)</option>
+                            <option value="drip">Drip (10 digits)</option>
+                            <option value="hg">HG Cheat (HG-XXXXXX)</option>
+                            <option value="brmod">BRMod (Username + Password)</option>
+                            <option value="lkteam">LKTEAM (LKTEAM-XXXXXX)</option>
+                            <option value="strict">Strict (STRICT-8 digits)</option>
+                            <option value="spotify">Spotify (Email + Password)</option>
+                            <option value="standard">Standard (KEY-XXXX-XXXX-XXXX)</option>
                         </select>
                     </div>
-                    <button class="btn-primary" id="save-product">Save</button>
+                    <button class="btn-primary" id="save-product">Save Product</button>
                     <button class="btn-secondary" id="cancel-product">Cancel</button>
                 </div>
 
@@ -190,10 +175,10 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Product</th>
+                                <th>Product Name</th>
                                 <th>Credits/Day</th>
+                                <th>Price/Day (₹)</th>
                                 <th>Key Type</th>
-                                <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -202,19 +187,10 @@
                             <tr>
                                 <td>{{ product[1] }}</td>
                                 <td>{{ product[2] }}</td>
-                                <td>{{ product[3] }}</td>
-                                <td>
-                                    <span class="status-badge status-{{ 'active' if product[4] else 'inactive' }}">
-                                        {{ 'Active' if product[4] else 'Inactive' }}
-                                    </span>
-                                </td>
+                                <td>₹{{ product[3] }}</td>
+                                <td><span class="key-type-badge">{{ product[4] }}</span></td>
                                 <td>
                                     <button class="btn-small btn-edit-product" data-product-id="{{ product[0] }}">Edit</button>
-                                    <button class="btn-small {% if product[4] %}btn-warning{% else %}btn-success{% endif %} btn-toggle-product" 
-                                            data-product-id="{{ product[0] }}" 
-                                            data-active="{{ product[4] }}">
-                                        {{ 'Disable' if product[4] else 'Enable' }}
-                                    </button>
                                     <button class="btn-small btn-danger btn-delete-product" data-product-id="{{ product[0] }}">Delete</button>
                                 </td>
                             </tr>
@@ -227,7 +203,7 @@
     </div>
 
     <!-- Edit Product Modal -->
-    <div id="edit-modal" class="modal" style="display: none;">
+    <div id="edit-product-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <h3>Edit Product</h3>
             <input type="hidden" id="edit-product-id">
@@ -240,17 +216,20 @@
                 <input type="number" step="0.5" id="edit-product-credits">
             </div>
             <div class="form-group">
+                <label>Price per Day (₹):</label>
+                <input type="number" step="1" id="edit-product-price">
+            </div>
+            <div class="form-group">
                 <label>Key Type:</label>
                 <select id="edit-product-keytype">
-                    <option value="standard">Standard</option>
-                    <option value="fluorite">Fluorite</option>
-                    <option value="gbox">Gbox</option>
-                    <option value="drip">Drip</option>
-                    <option value="hg">HG Cheat</option>
-                    <option value="brmod">BRMod</option>
-                    <option value="lkteam">LKTEAM</option>
-                    <option value="strict">Strict</option>
-                    <option value="spotify">Spotify</option>
+                    <option value="fluorite">Fluorite/Gbox (16 chars alphanumeric)</option>
+                    <option value="drip">Drip (10 digits)</option>
+                    <option value="hg">HG Cheat (HG-XXXXXX)</option>
+                    <option value="brmod">BRMod (Username + Password)</option>
+                    <option value="lkteam">LKTEAM (LKTEAM-XXXXXX)</option>
+                    <option value="strict">Strict (STRICT-8 digits)</option>
+                    <option value="spotify">Spotify (Email + Password)</option>
+                    <option value="standard">Standard (KEY-XXXX-XXXX-XXXX)</option>
                 </select>
             </div>
             <button class="btn-primary" id="update-product">Update</button>
@@ -259,263 +238,19 @@
     </div>
 
     <!-- Add Credits Modal -->
-    <div id="credits-modal" class="modal" style="display: none;">
+    <div id="add-credits-modal" class="modal" style="display: none;">
         <div class="modal-content">
-            <h3>Add Credits</h3>
-            <input type="hidden" id="credits-username">
+            <h3>Add Credits to User</h3>
+            <input type="hidden" id="add-credits-username">
             <div class="form-group">
                 <label>Credits to add:</label>
-                <input type="number" step="0.5" id="credits-amount" min="1" required>
+                <input type="number" step="0.5" id="add-credits-amount" min="1" required>
             </div>
-            <button class="btn-primary" id="confirm-add-credits">Add</button>
+            <button class="btn-primary" id="confirm-add-credits">Add Credits</button>
             <button class="btn-secondary" id="close-credits-modal">Cancel</button>
         </div>
     </div>
 
-    <script>
-    // Tab switching
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            this.classList.add('active');
-            document.getElementById(this.dataset.tab + '-tab').classList.add('active');
-        });
-    });
-
-    // Add product
-    document.getElementById('add-product-btn').addEventListener('click', function() {
-        document.getElementById('add-product-form').style.display = 'block';
-    });
-
-    document.getElementById('cancel-product').addEventListener('click', function() {
-        document.getElementById('add-product-form').style.display = 'none';
-    });
-
-    document.getElementById('save-product').addEventListener('click', function() {
-        const name = document.getElementById('new-product-name').value;
-        const credits = document.getElementById('new-product-credits').value;
-        const keytype = document.getElementById('new-product-keytype').value;
-
-        if (!name || !credits) {
-            alert('Please fill all fields');
-            return;
-        }
-
-        fetch('/admin/add_product', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: name,
-                credit_cost_per_day: credits,
-                key_type: keytype
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Product added');
-                location.reload();
-            } else {
-                alert('Error: ' + data.error);
-            }
-        });
-    });
-
-    // Edit product
-    document.querySelectorAll('.btn-edit-product').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const row = this.closest('tr');
-            const cells = row.querySelectorAll('td');
-            
-            document.getElementById('edit-product-id').value = this.dataset.productId;
-            document.getElementById('edit-product-name').value = cells[0].textContent;
-            document.getElementById('edit-product-credits').value = cells[1].textContent;
-            
-            const keyType = cells[2].textContent.trim();
-            const select = document.getElementById('edit-product-keytype');
-            for (let option of select.options) {
-                if (option.value === keyType) {
-                    option.selected = true;
-                    break;
-                }
-            }
-            
-            document.getElementById('edit-modal').style.display = 'flex';
-        });
-    });
-
-    document.getElementById('update-product').addEventListener('click', function() {
-        fetch('/admin/edit_product', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                product_id: document.getElementById('edit-product-id').value,
-                name: document.getElementById('edit-product-name').value,
-                credit_cost_per_day: document.getElementById('edit-product-credits').value,
-                key_type: document.getElementById('edit-product-keytype').value
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Product updated');
-                location.reload();
-            }
-        });
-    });
-
-    // Toggle product
-    document.querySelectorAll('.btn-toggle-product').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const productId = this.dataset.productId;
-            const isActive = this.dataset.active === '1' ? 0 : 1;
-            
-            fetch('/admin/toggle_product', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    product_id: productId,
-                    is_active: isActive
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) location.reload();
-            });
-        });
-    });
-
-    // Delete product
-    document.querySelectorAll('.btn-delete-product').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (!confirm('Delete this product?')) return;
-            
-            fetch('/admin/delete_product', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ product_id: this.dataset.productId })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) location.reload();
-            });
-        });
-    });
-
-    // Add credits
-    document.querySelectorAll('.btn-add-credits').forEach(btn => {
-        btn.addEventListener('click', function() {
-            document.getElementById('credits-username').value = this.dataset.username;
-            document.getElementById('credits-modal').style.display = 'flex';
-        });
-    });
-
-    document.getElementById('confirm-add-credits').addEventListener('click', function() {
-        const username = document.getElementById('credits-username').value;
-        const credits = document.getElementById('credits-amount').value;
-
-        if (!credits || credits < 1) {
-            alert('Enter valid amount');
-            return;
-        }
-
-        fetch('/admin/add_credits', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: username, credits: credits })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Credits added');
-                location.reload();
-            }
-        });
-    });
-
-    // Approve payment
-    document.querySelectorAll('.btn-approve-payment').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (!confirm('Approve this payment?')) return;
-            
-            fetch('/admin/approve_payment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ payment_id: this.dataset.paymentId })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) location.reload();
-            });
-        });
-    });
-
-    // Reject payment
-    document.querySelectorAll('.btn-reject-payment').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (!confirm('Reject this payment?')) return;
-            
-            fetch('/admin/reject_payment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ payment_id: this.dataset.paymentId })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) location.reload();
-            });
-        });
-    });
-
-    // Delete user
-    document.querySelectorAll('.btn-delete-user').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (!confirm('Delete this user? All their keys will also be deleted.')) return;
-            
-            fetch('/admin/delete_user', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: this.dataset.username })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) location.reload();
-            });
-        });
-    });
-
-    // Delete key
-    document.querySelectorAll('.btn-delete-key').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (!confirm('Delete this key?')) return;
-            
-            fetch('/admin/delete_key', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ license_id: this.dataset.licenseId })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) location.reload();
-            });
-        });
-    });
-
-    // Close modals
-    document.getElementById('close-modal').addEventListener('click', function() {
-        document.getElementById('edit-modal').style.display = 'none';
-    });
-
-    document.getElementById('close-credits-modal').addEventListener('click', function() {
-        document.getElementById('credits-modal').style.display = 'none';
-    });
-
-    window.addEventListener('click', function(e) {
-        if (e.target.classList.contains('modal')) {
-            e.target.style.display = 'none';
-        }
-    });
-    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>
