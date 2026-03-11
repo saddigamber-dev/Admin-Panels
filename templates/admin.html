@@ -66,6 +66,7 @@
                                 <th>Username</th>
                                 <th>UTR</th>
                                 <th>Amount (₹)</th>
+                                <th>Credits to Add</th>
                                 <th>Date</th>
                                 <th>Status</th>
                                 <th>Action</th>
@@ -77,11 +78,13 @@
                                 <td>{{ payment[1] }}</td>
                                 <td>{{ payment[2] }}</td>
                                 <td>₹{{ payment[3] }}</td>
-                                <td>{{ payment[5] }}</td>
-                                <td><span class="status-badge status-{{ payment[4] }}">{{ payment[4] }}</span></td>
+                                <td>{{ payment[4] }}</td>
+                                <td>{{ payment[6] }}</td>
+                                <td><span class="status-badge status-{{ payment[5] }}">{{ payment[5] }}</span></td>
                                 <td>
-                                    {% if payment[4] == 'pending' %}
+                                    {% if payment[5] == 'pending' %}
                                     <button class="btn-small btn-approve-payment" data-payment-id="{{ payment[0] }}">Approve</button>
+                                    <button class="btn-small btn-danger btn-reject-payment" data-payment-id="{{ payment[0] }}">Reject</button>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -103,6 +106,8 @@
                                 <th>Key/Credentials</th>
                                 <th>Username</th>
                                 <th>Product</th>
+                                <th>Days</th>
+                                <th>Credits Used</th>
                                 <th>Expiry Date</th>
                                 <th>Status</th>
                                 <th>Action</th>
@@ -114,8 +119,10 @@
                                 <td class="key-cell">{{ license[1] }}</td>
                                 <td>{{ license[2] }}</td>
                                 <td>{{ license[3] }}</td>
+                                <td>{{ license[4] }} days</td>
                                 <td>{{ license[5] }}</td>
-                                <td><span class="status-badge status-{{ license[6] }}">{{ license[6] }}</span></td>
+                                <td>{{ license[6] }}</td>
+                                <td><span class="status-badge status-{{ license[7] }}">{{ license[7] }}</span></td>
                                 <td>
                                     <button class="btn-small btn-danger btn-delete-key" data-license-id="{{ license[0] }}">Delete</button>
                                 </td>
@@ -140,34 +147,24 @@
                         <input type="text" id="new-product-name" required>
                     </div>
                     <div class="form-group">
-                        <label>Credit Cost:</label>
-                        <input type="number" id="new-product-cost" required>
+                        <label>Credits per Day:</label>
+                        <input type="number" step="0.5" id="new-product-credits" required>
                     </div>
                     <div class="form-group">
-                        <label>Duration (Days):</label>
-                        <select id="new-product-days">
-                            <option value="1">1 day</option>
-                            <option value="7">7 days</option>
-                            <option value="15">15 days</option>
-                            <option value="30">30 days</option>
-                            <option value="60">60 days</option>
-                            <option value="90">90 days</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Price (₹):</label>
+                        <label>Price per Day (₹):</label>
                         <input type="number" step="1" id="new-product-price" required>
                     </div>
                     <div class="form-group">
                         <label>Key Type:</label>
                         <select id="new-product-keytype">
-                            <option value="standard">Standard (KEY-XXXX-XXXX-XXXX)</option>
-                            <option value="fluorite">Fluorite (16 chars alphanumeric)</option>
+                            <option value="fluorite">Fluorite/Gbox (16 chars alphanumeric)</option>
                             <option value="drip">Drip (10 digits)</option>
                             <option value="hg">HG Cheat (HG-XXXXXX)</option>
                             <option value="brmod">BRMod (Username + Password)</option>
                             <option value="lkteam">LKTEAM (LKTEAM-XXXXXX)</option>
+                            <option value="strict">Strict (STRICT-8 digits)</option>
                             <option value="spotify">Spotify (Email + Password)</option>
+                            <option value="standard">Standard (KEY-XXXX-XXXX-XXXX)</option>
                         </select>
                     </div>
                     <button class="btn-primary" id="save-product">Save Product</button>
@@ -179,9 +176,8 @@
                         <thead>
                             <tr>
                                 <th>Product Name</th>
-                                <th>Credit Cost</th>
-                                <th>Days</th>
-                                <th>Price (₹)</th>
+                                <th>Credits/Day</th>
+                                <th>Price/Day (₹)</th>
                                 <th>Key Type</th>
                                 <th>Actions</th>
                             </tr>
@@ -191,9 +187,8 @@
                             <tr>
                                 <td>{{ product[1] }}</td>
                                 <td>{{ product[2] }}</td>
-                                <td>{{ product[3] }} days</td>
-                                <td>₹{{ product[4] }}</td>
-                                <td>{{ product[5] }}</td>
+                                <td>₹{{ product[3] }}</td>
+                                <td><span class="key-type-badge">{{ product[4] }}</span></td>
                                 <td>
                                     <button class="btn-small btn-edit-product" data-product-id="{{ product[0] }}">Edit</button>
                                     <button class="btn-small btn-danger btn-delete-product" data-product-id="{{ product[0] }}">Delete</button>
@@ -217,34 +212,24 @@
                 <input type="text" id="edit-product-name">
             </div>
             <div class="form-group">
-                <label>Credit Cost:</label>
-                <input type="number" id="edit-product-cost">
+                <label>Credits per Day:</label>
+                <input type="number" step="0.5" id="edit-product-credits">
             </div>
             <div class="form-group">
-                <label>Duration (Days):</label>
-                <select id="edit-product-days">
-                    <option value="1">1 day</option>
-                    <option value="7">7 days</option>
-                    <option value="15">15 days</option>
-                    <option value="30">30 days</option>
-                    <option value="60">60 days</option>
-                    <option value="90">90 days</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Price (₹):</label>
+                <label>Price per Day (₹):</label>
                 <input type="number" step="1" id="edit-product-price">
             </div>
             <div class="form-group">
                 <label>Key Type:</label>
                 <select id="edit-product-keytype">
-                    <option value="standard">Standard (KEY-XXXX-XXXX-XXXX)</option>
-                    <option value="fluorite">Fluorite (16 chars alphanumeric)</option>
+                    <option value="fluorite">Fluorite/Gbox (16 chars alphanumeric)</option>
                     <option value="drip">Drip (10 digits)</option>
                     <option value="hg">HG Cheat (HG-XXXXXX)</option>
                     <option value="brmod">BRMod (Username + Password)</option>
                     <option value="lkteam">LKTEAM (LKTEAM-XXXXXX)</option>
+                    <option value="strict">Strict (STRICT-8 digits)</option>
                     <option value="spotify">Spotify (Email + Password)</option>
+                    <option value="standard">Standard (KEY-XXXX-XXXX-XXXX)</option>
                 </select>
             </div>
             <button class="btn-primary" id="update-product">Update</button>
@@ -259,7 +244,7 @@
             <input type="hidden" id="add-credits-username">
             <div class="form-group">
                 <label>Credits to add:</label>
-                <input type="number" id="add-credits-amount" min="1" required>
+                <input type="number" step="0.5" id="add-credits-amount" min="1" required>
             </div>
             <button class="btn-primary" id="confirm-add-credits">Add Credits</button>
             <button class="btn-secondary" id="close-credits-modal">Cancel</button>
