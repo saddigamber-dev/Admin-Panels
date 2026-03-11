@@ -1,1 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recharge Credits - Neon Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <img src="https://i.ibb.co/1GBn25c5/VID-20260310-172522-610-ezgif-com-video-to-gif-converter.gif" alt="Logo" class="nav-logo">
+            <a href="{{ url_for('user_dashboard') }}" class="btn-logout">Back to Dashboard</a>
+        </div>
+    </nav>
 
+    <div class="container">
+        <div class="payment-container">
+            <div class="card">
+                <h2>Recharge Credits</h2>
+                
+                {% if success %}
+                <div class="success-message">{{ success }}</div>
+                {% endif %}
+                
+                {% if error %}
+                <div class="error-message">{{ error }}</div>
+                {% endif %}
+                
+                <div class="qr-placeholder">
+                    <p>QR Code Placeholder</p>
+                    <p class="qr-note">Scan to pay (UPI/QR)</p>
+                </div>
+                
+                <form method="POST" action="{{ url_for('payment') }}">
+                    <div class="form-group">
+                        <label for="amount">Amount ($)</label>
+                        <input type="number" id="amount" name="amount" step="0.01" min="1" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="utr">UTR Number (12 digits)</label>
+                        <input type="text" id="utr" name="utr" pattern="\d{12}" maxlength="12" required>
+                        <small>Enter the 12-digit UTR number from your payment</small>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">Submit Payment</button>
+                </form>
+                
+                <div class="payment-info">
+                    <p><strong>Note:</strong> Credits will be added after admin approval.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
