@@ -23,8 +23,8 @@ CREDIT_RATE = 0.5
 MINIMUM_RECHARGE = 1000
 
 # UPI Details
-UPI_ID = "thedigamber@fam"
-UPI_NAME = "Digamber"
+UPI_ID = "prabhu84@ptaxis"
+UPI_NAME = "Digamber Raj"
 
 # Support Links
 WHATSAPP_LINK = "https://wa.me/message/IGTHSKO23KP4H1"
