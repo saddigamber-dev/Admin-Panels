@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binance Crypto Payment</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <img src="https://i.ibb.co/1GBn25c5/VID-20260310-172522-610-ezgif-com-video-to-gif-converter.gif" alt="Logo" class="nav-logo">
+            <div class="nav-credits">Credits: {{ session.credits }}</div>
+            <div class="nav-user">{{ session.username }}</div>
+            <a href="{{ url_for('payment_page') }}" class="btn-logout">← Back</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="payment-container">
+            <div class="card">
+                <div style="background: linear-gradient(145deg, #f0b90b, #d4a00a); padding: 1rem; border-radius: 40px; text-align: center; margin-bottom: 2rem;">
+                    <i class="fab fa-bitcoin" style="font-size: 2rem;"></i>
+                    <i class="fab fa-ethereum" style="font-size: 2rem;"></i>
+                    <h2 style="color: black; margin: 0;">BINANCE CRYPTO PAYMENT</h2>
+                    <p style="color: black;"><strong>AUTO CREDITS</strong> on successful payment</p>
+                </div>
+                
+                {% if error %}
+                <div class="error-message">{{ error }}</div>
+                {% endif %}
+                
+                {% if order_id %}
+                <!-- Payment Details -->
+                <div style="text-align: center; margin-bottom: 2rem;">
+                    <h3>Order Created!</h3>
+                    <p>Order ID: <strong>{{ order_id }}</strong></p>
+                    <p>Amount: <strong>₹{{ amount }}</strong></p>
+                    <p>Credits: <strong class="neon-text-green">{{ credits }}</strong></p>
+                </div>
+                
+                <!-- QR Code -->
+                {% if qr_code %}
+                <div class="qr-container">
+                    <img src="data:image/png;base64,{{ qr_code }}" alt="Binance QR" style="max-width: 250px;">
+                    <p>Scan with Binance app</p>
+                </div>
+                {% endif %}
+                
+                <!-- Address -->
+                {% if address %}
+                <div style="text-align: center; margin: 1rem 0; padding: 1rem; background: rgba(0,0,0,0.5); border-radius: 10px;">
+                    <p>Or send to address:</p>
+                    <code style="word-break: break-all;">{{ address }}</code>
+                </div>
+                {% endif %}
+                
+                <!-- Auto-check Status -->
+                <div style="text-align: center; margin: 2rem 0;" id="payment-status">
+                    <p><i class="fas fa-spinner fa-spin"></i> Waiting for payment...</p>
+                    <div style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden;">
+                        <div style="height: 100%; width: 0%; background: var(--accent-green);" id="progress-bar"></div>
+                    </div>
+                </div>
+                
+                <script>
+                let checkCount = 0;
+                function checkPayment() {
+                    fetch('/payment/binance/check/{{ order_id }}')
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                if (data.status === 'completed') {
+                                    document.getElementById('payment-status').innerHTML = `
+                                        <div class="success-message">
+                                            <i class="fas fa-check-circle" style="font-size: 3rem;"></i>
+                                            <h3>✅ PAYMENT RECEIVED!</h3>
+                                            <p>{{ credits }} Credits added to your account!</p>
+                                            <a href="{{ url_for('user_dashboard') }}" class="btn-primary">Go to Dashboard</a>
+                                        </div>
+                                    `;
+                                } else {
+                                    checkCount++;
+                                    let progress = Math.min(checkCount * 10, 90);
+                                    document.getElementById('progress-bar').style.width = progress + '%';
+                                    setTimeout(checkPayment, 5000);
+                                }
+                            }
+                        });
+                }
+                setTimeout(checkPayment, 5000);
+                </script>
+                
+                {% else %}
+                <!-- Amount Form -->
+                <form method="POST">
+                    <div class="form-group">
+                        <label>Amount (₹) - Minimum ₹{{ min_recharge }}</label>
+                        <input type="number" name="amount" min="{{ min_recharge }}" step="1" required>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1rem 0;">
+                        <button type="button" class="btn-secondary" onclick="this.form.amount.value=1000">₹1000</button>
+                        <button type="button" class="btn-secondary" onclick="this.form.amount.value=2000">₹2000</button>
+                        <button type="button" class="btn-secondary" onclick="this.form.amount.value=5000">₹5000</button>
+                        <button type="button" class="btn-secondary" onclick="this.form.amount.value=10000">₹10000</button>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary" style="background: linear-gradient(145deg, #f0b90b, #d4a00a);">
+                        <i class="fab fa-bitcoin"></i> Create Binance Order
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
