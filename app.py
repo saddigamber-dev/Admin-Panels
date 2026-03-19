@@ -328,7 +328,7 @@ class KeyGenerator:
 key_gen = KeyGenerator()
 
 # ============================================
-# BINANCE API CLASS - COMPLETE
+# BINANCE API CLASS
 # ============================================
 
 class BinanceAPI:
@@ -337,7 +337,6 @@ class BinanceAPI:
         self.timeout = 30
     
     def _request(self, endpoint, method='GET', data=None):
-        """Make API request to Binance verifier"""
         try:
             url = self.base_url + endpoint
             headers = {'Content-Type': 'application/json'}
@@ -357,7 +356,6 @@ class BinanceAPI:
             return {'success': False, 'error': str(e)}
     
     def create_order(self, amount, email=None):
-        """Create payment order"""
         try:
             payload = {
                 'amount': float(amount),
@@ -366,7 +364,6 @@ class BinanceAPI:
             result = self._request('/api/create-order', 'POST', payload)
             if result and result.get('success'):
                 return result
-            # Fallback
             return {
                 'success': True,
                 'orderId': f"ORD{int(time.time())}{random.randint(100,999)}",
@@ -377,7 +374,6 @@ class BinanceAPI:
             return {'success': False, 'error': str(e)}
     
     def check_order(self, order_id):
-        """Check order status"""
         try:
             result = self._request(f'/api/check/{order_id}')
             if result:
@@ -387,19 +383,17 @@ class BinanceAPI:
             return {'success': True, 'status': 'pending', 'orderId': order_id}
     
     def cancel_order(self, order_id):
-        """Cancel order"""
         try:
             result = self._request(f'/api/cancel/{order_id}', 'POST')
             return result if result else {'success': True, 'message': 'Order cancelled'}
-        except:
-            return {'success': True, 'message': 'Order cancelled'}
+        except Exception as e:
+            logging.error(f"Cancel order API error: {e}")
+            return {'success': False, 'error': str(e)}
     
     def get_address(self, order_id):
-        """Get deposit address"""
         return {'address': BINANCE_ADDRESS}
     
     def get_qr(self, order_id):
-        """Get QR code"""
         return self._request(f'/api/qr/{order_id}')
 
 binance_api = BinanceAPI()
@@ -409,7 +403,6 @@ binance_api = BinanceAPI()
 # ============================================
 
 def generate_upi_qr(amount):
-    """Generate UPI QR code"""
     try:
         upi_url = f"upi://pay?pa={UPI_ID}&pn={UPI_NAME}&am={amount}&cu=INR"
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
@@ -424,7 +417,6 @@ def generate_upi_qr(amount):
         return None
 
 def format_datetime(dt):
-    """Safely format datetime"""
     if dt is None:
         return 'N/A'
     if hasattr(dt, 'strftime'):
@@ -699,7 +691,6 @@ def upi_payment():
 
 @app.route('/payment/binance', methods=['GET', 'POST'])
 def binance_payment():
-    """Binance Crypto Payment - FIXED"""
     if 'username' not in session:
         return redirect(url_for('login'))
     
@@ -718,7 +709,6 @@ def binance_payment():
         
         amount_usd = round(amount_inr / USD_TO_INR, 2)
         
-        # Create order
         result = binance_api.create_order(amount_usd, session['username'])
         
         if result and result.get('success'):
@@ -934,15 +924,15 @@ def approve_payment():
     if not payment_id:
         return jsonify({'success': False, 'error': 'Payment ID required'})
     
-    conn = get_db_connection()
-    c = conn.cursor()
-    
+    conn = None
     try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        
         c.execute("SELECT * FROM payments WHERE id = %s", (payment_id,))
         payment = c.fetchone()
         
         if not payment:
-            conn.close()
             return jsonify({'success': False, 'error': 'Payment not found'})
         
         c.execute('''
@@ -958,15 +948,17 @@ def approve_payment():
         ''', (payment['credits_added'], payment['amount'], payment['username']))
         
         conn.commit()
-        conn.close()
-        return jsonify({'success': True, 'message': 'Payment approved'})
+        return jsonify({'success': True, 'message': 'Payment approved successfully'})
+        
     except Exception as e:
-        conn.close()
+        logging.error(f"Approve payment error: {e}")
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 @app.route('/admin/reject_payment', methods=['POST'])
 def reject_payment():
-    """FIXED: Reject payment with reason"""
     if 'username' not in session or session.get('role') != 'admin':
         return jsonify({'success': False, 'error': 'Unauthorized'})
     
@@ -977,10 +969,17 @@ def reject_payment():
     if not payment_id:
         return jsonify({'success': False, 'error': 'Payment ID required'})
     
-    conn = get_db_connection()
-    c = conn.cursor()
-    
+    conn = None
     try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        
+        c.execute("SELECT * FROM payments WHERE id = %s", (payment_id,))
+        payment = c.fetchone()
+        
+        if not payment:
+            return jsonify({'success': False, 'error': 'Payment not found'})
+        
         c.execute('''
             UPDATE payments 
             SET status = 'rejected', rejection_reason = %s, approved_by = %s
@@ -988,19 +987,17 @@ def reject_payment():
         ''', (reason, session['username'], payment_id))
         
         conn.commit()
-        conn.close()
         return jsonify({'success': True, 'message': 'Payment rejected'})
+        
     except Exception as e:
-        conn.close()
+        logging.error(f"Reject payment error: {e}")
         return jsonify({'success': False, 'error': str(e)})
-
-# ============================================
-# ADMIN - BINANCE CONTROLS (CANCEL)
-# ============================================
+    finally:
+        if conn:
+            conn.close()
 
 @app.route('/admin/cancel_binance_order', methods=['POST'])
 def cancel_binance_order():
-    """Admin cancel Binance order"""
     if 'username' not in session or session.get('role') != 'admin':
         return jsonify({'success': False, 'error': 'Unauthorized'})
     
@@ -1010,33 +1007,27 @@ def cancel_binance_order():
     if not order_id:
         return jsonify({'success': False, 'error': 'Order ID required'})
     
-    # Cancel on Binance
-    result = binance_api.cancel_order(order_id)
-    
-    # Delete from database
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("DELETE FROM payments WHERE order_id = %s", (order_id,))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'message': 'Order cancelled and deleted'})
-
-@app.route('/admin/delete_binance_payment', methods=['POST'])
-def delete_binance_payment():
-    if 'username' not in session or session.get('role') != 'admin':
-        return jsonify({'success': False, 'error': 'Unauthorized'})
-    
-    data = request.get_json()
-    payment_id = data.get('payment_id')
-    
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("DELETE FROM payments WHERE id = %s AND payment_method = 'binance'", (payment_id,))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'success': True, 'message': 'Binance payment deleted'})
+    conn = None
+    try:
+        binance_result = binance_api.cancel_order(order_id)
+        
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("DELETE FROM payments WHERE order_id = %s", (order_id,))
+        conn.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': 'Order cancelled and deleted',
+            'binance_response': binance_result
+        })
+        
+    except Exception as e:
+        logging.error(f"Cancel order error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            conn.close()
 
 # ============================================
 # ADMIN - PRODUCT MANAGEMENT
