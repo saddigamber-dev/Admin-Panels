@@ -65,7 +65,7 @@
             </button>
         </div>
 
-        <!-- USERS TAB -->
+        <!-- USERS TAB - FIXED -->
         <div id="users-tab" class="tab-content active">
             <div class="card">
                 <h2><i class="fas fa-user-cog"></i> Manage Users</h2>
@@ -95,7 +95,11 @@
                                 <td>₹{{ user.total_recharged or 0 }}</td>
                                 <td>
                                     {% if user.created_at %}
-                                        {{ user.created_at[:10] }}
+                                        {% if user.created_at is string %}
+                                            {{ user.created_at[:10] }}
+                                        {% else %}
+                                            {{ user.created_at.strftime('%Y-%m-%d') }}
+                                        {% endif %}
                                     {% else %}
                                         N/A
                                     {% endif %}
@@ -119,7 +123,7 @@
             </div>
         </div>
 
-        <!-- PAYMENTS TAB - COMPLETE FIXED VERSION -->
+        <!-- PAYMENTS TAB -->
         <div id="payments-tab" class="tab-content">
             <div class="card">
                 <h2><i class="fas fa-credit-card"></i> Payment Requests</h2>
@@ -155,7 +159,11 @@
                                 <td>{{ payment.credits_added }}</td>
                                 <td>
                                     {% if payment.date %}
-                                        {{ payment.date[:16] }}
+                                        {% if payment.date is string %}
+                                            {{ payment.date[:16] }}
+                                        {% else %}
+                                            {{ payment.date.strftime('%Y-%m-%d %H:%M') }}
+                                        {% endif %}
                                     {% else %}
                                         N/A
                                     {% endif %}
@@ -175,7 +183,6 @@
                                             <i class="fas fa-times-circle"></i> Reject
                                         </button>
                                         {% elif payment.payment_method == 'binance' %}
-                                        <!-- Binance ke liye bhi REJECT button -->
                                         <button class="btn-small btn-danger btn-reject-payment" data-payment-id="{{ payment.id }}">
                                             <i class="fas fa-times-circle"></i> Reject
                                         </button>
@@ -235,7 +242,17 @@
                                 <td>{{ license.product_name }}</td>
                                 <td>{{ license.days }} days</td>
                                 <td>{{ license.total_credits }}</td>
-                                <td>{{ license.expiry_date[:16] }}</td>
+                                <td>
+                                    {% if license.expiry_date %}
+                                        {% if license.expiry_date is string %}
+                                            {{ license.expiry_date[:16] }}
+                                        {% else %}
+                                            {{ license.expiry_date.strftime('%Y-%m-%d %H:%M') }}
+                                        {% endif %}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <span class="status-badge status-{{ license.status }}">
                                         {{ license.status }}
@@ -412,7 +429,11 @@
                                 <td>{{ key_type.description }}</td>
                                 <td>
                                     {% if key_type.created_at %}
-                                        {{ key_type.created_at[:10] }}
+                                        {% if key_type.created_at is string %}
+                                            {{ key_type.created_at[:10] }}
+                                        {% else %}
+                                            {{ key_type.created_at.strftime('%Y-%m-%d') }}
+                                        {% endif %}
                                     {% else %}
                                         N/A
                                     {% endif %}
