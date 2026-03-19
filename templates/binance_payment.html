@@ -23,7 +23,6 @@
                 <div style="background: linear-gradient(145deg, #f0b90b, #d4a00a); padding: 1.5rem; border-radius: 40px; text-align: center; margin-bottom: 2rem;">
                     <i class="fab fa-bitcoin" style="font-size: 2.5rem;"></i>
                     <i class="fab fa-ethereum" style="font-size: 2.5rem;"></i>
-                    <i class="fab fa-btc" style="font-size: 2.5rem;"></i>
                     <h2 style="color: black; margin: 0.5rem 0;">BINANCE CRYPTO PAYMENT</h2>
                     <p style="color: black; font-weight: bold;">AUTO CREDITS on successful payment</p>
                     <p style="color: black;">💰 1 USD = {{ usd_to_inr }} INR</p>
@@ -42,36 +41,19 @@
                     <p style="margin: 0.5rem 0;">Credits: <strong class="neon-text-green">{{ credits }}</strong></p>
                 </div>
                 
-                <!-- Binance Address - FIXED for 1143351874 -->
-                {% if address %}
+                <!-- BINANCE ADDRESS - FIXED WITH REAL ADDRESS -->
                 <div style="text-align: center; margin: 2rem 0; padding: 2rem; background: rgba(0,0,0,0.5); border-radius: 20px; border: 2px solid var(--accent-green);">
                     <i class="fas fa-wallet" style="font-size: 3rem; color: var(--accent-green); margin-bottom: 1rem;"></i>
-                    <h3 style="color: var(--accent-green);">Send to this Address</h3>
-                    <div style="background: rgba(0,0,0,0.7); padding: 1.5rem; border-radius: 15px; margin: 1rem 0; border: 1px solid var(--accent-pink); word-break: break-all;">
-                        <code style="font-size: 0.9rem; color: var(--accent-green);">{{ address }}</code>
+                    <h3 style="color: var(--accent-green);">Send to this Binance ID</h3>
+                    <div style="background: rgba(0,0,0,0.7); padding: 1.5rem; border-radius: 15px; margin: 1rem 0; border: 1px solid var(--accent-pink);">
+                        <code style="font-size: 1.5rem; color: var(--accent-green); font-weight: bold;">1143351874</code>
                     </div>
-                    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
-                        <button class="btn-primary" style="width: auto; padding: 0.8rem 2rem; background: var(--accent-green); color: black;" onclick="copyAddress('{{ address }}')">
-                            <i class="fas fa-copy"></i> COPY ADDRESS
-                        </button>
-                        {% if order_id == '1143351874' %}
-                        <span style="background: var(--accent-pink); padding: 0.8rem 2rem; border-radius: 10px; color: white;">
-                            <i class="fas fa-check-circle"></i> Address Verified
-                        </span>
-                        {% endif %}
-                    </div>
-                    <p style="margin-top: 1rem; color: var(--text-secondary);">Send exactly <strong>${{ amount_usd }}</strong> worth of crypto</p>
+                    <button class="btn-primary" style="width: auto; padding: 1rem 3rem; background: var(--accent-green); color: black;" onclick="copyAddress('1143351874')">
+                        <i class="fas fa-copy"></i> COPY BINANCE ID
+                    </button>
+                    <p style="margin-top: 1rem; color: var(--text-secondary);">Send exactly <strong>${{ amount_usd }}</strong> worth of crypto to this Binance ID</p>
+                    <p style="color: var(--accent-yellow); font-size: 0.9rem;">⚠️ Make sure you're sending to the correct Binance ID</p>
                 </div>
-                {% else %}
-                <div style="text-align: center; margin: 2rem 0; padding: 2rem; background: rgba(255,0,0,0.1); border-radius: 15px; border: 1px solid var(--accent-red);">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--accent-red);"></i>
-                    <h3 style="color: var(--accent-red);">Address Not Available</h3>
-                    <p>Please contact support on WhatsApp</p>
-                    <a href="{{ whatsapp_link }}" target="_blank" class="btn-whatsapp" style="width: auto; padding: 0.8rem 2rem; margin-top: 1rem;">
-                        <i class="fab fa-whatsapp"></i> Contact Support
-                    </a>
-                </div>
-                {% endif %}
                 
                 <!-- Auto-check Status -->
                 <div style="text-align: center; margin: 2rem 0;" id="payment-status">
@@ -82,6 +64,7 @@
                         <div style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden; margin-top: 1.5rem;">
                             <div style="height: 100%; width: 0%; background: var(--accent-green);" id="progress-bar"></div>
                         </div>
+                        <p style="margin-top: 1rem; color: var(--accent-yellow);">⏱️ Payment expires in 10 minutes</p>
                     </div>
                 </div>
                 
@@ -95,12 +78,13 @@
                 <script>
                 let checkCount = 0;
                 let checkInterval;
+                let expiryTime = Date.now() + (10 * 60 * 1000); // 10 minutes
                 
                 function copyAddress(address) {
                     navigator.clipboard.writeText(address).then(function() {
-                        alert('✅ Address copied to clipboard!');
+                        alert('✅ Binance ID 1143351874 copied to clipboard!');
                     }, function() {
-                        alert('❌ Failed to copy address. Please copy manually.');
+                        alert('❌ Failed to copy. Please copy manually: 1143351874');
                     });
                 }
                 
@@ -108,9 +92,29 @@
                     checkCount++;
                     let progress = Math.min(checkCount * 5, 90);
                     document.getElementById('progress-bar').style.width = progress + '%';
+                    
+                    // Check if expired
+                    if (Date.now() > expiryTime) {
+                        document.getElementById('payment-status').innerHTML = `
+                            <div class="error-message">
+                                <i class="fas fa-clock"></i>
+                                <h3>⏰ PAYMENT EXPIRED</h3>
+                                <p>Order expired after 10 minutes. Please create a new payment.</p>
+                                <a href="{{ url_for('binance_payment') }}" class="btn-primary" style="margin-top: 1rem;">
+                                    <i class="fas fa-redo"></i> Create New Order
+                                </a>
+                            </div>
+                        `;
+                        clearInterval(checkInterval);
+                    }
                 }
                 
                 function checkPayment() {
+                    if (Date.now() > expiryTime) {
+                        updateProgress();
+                        return;
+                    }
+                    
                     fetch('/payment/binance/check/{{ order_id }}')
                         .then(response => response.json())
                         .then(data => {
@@ -140,10 +144,29 @@
                 // Start checking every 5 seconds
                 checkInterval = setInterval(checkPayment, 5000);
                 setTimeout(checkPayment, 2000);
+                
+                // Auto-delete after 10 minutes
+                setTimeout(function() {
+                    fetch('/payment/binance/cleanup/{{ order_id }}', { method: 'POST' })
+                        .then(() => {
+                            if (document.getElementById('payment-status')) {
+                                document.getElementById('payment-status').innerHTML = `
+                                    <div class="error-message">
+                                        <i class="fas fa-clock"></i>
+                                        <h3>⏰ PAYMENT EXPIRED</h3>
+                                        <p>Order automatically deleted after 10 minutes.</p>
+                                        <a href="{{ url_for('binance_payment') }}" class="btn-primary" style="margin-top: 1rem;">
+                                            <i class="fas fa-redo"></i> Create New Order
+                                        </a>
+                                    </div>
+                                `;
+                            }
+                        });
+                }, 10 * 60 * 1000);
                 </script>
                 
                 {% else %}
-                <!-- Amount Form - USD Preview -->
+                <!-- Amount Form -->
                 <form method="POST">
                     <div class="form-group">
                         <label><i class="fas fa-rupee-sign"></i> Amount (₹) - Minimum ₹{{ min_recharge }}</label>
@@ -167,6 +190,12 @@
                     <!-- Credits Preview -->
                     <div style="background: rgba(0,255,0,0.1); padding: 1.5rem; border-radius: 15px; margin-bottom: 1.5rem; text-align: center;">
                         <p>You will get: <strong class="neon-text-green" id="credit-preview">0</strong> Credits</p>
+                    </div>
+                    
+                    <!-- Binance ID Display -->
+                    <div style="text-align: center; margin-bottom: 1.5rem; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 10px;">
+                        <p style="color: var(--text-secondary);">Send payments to Binance ID:</p>
+                        <p style="font-size: 1.8rem; color: var(--accent-green); font-weight: bold;">1143351874</p>
                     </div>
                     
                     <button type="submit" class="btn-primary" style="background: linear-gradient(145deg, #f0b90b, #d4a00a);">
@@ -198,7 +227,6 @@
                     updateCredits(this.value);
                 });
                 
-                // Initial update
                 window.addEventListener('load', function() {
                     let amount = document.getElementById('amount-input')?.value || {{ min_recharge }};
                     updateUSD(amount);
