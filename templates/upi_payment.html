@@ -38,15 +38,14 @@
                     <i class="fas fa-check-circle"></i>
                     <h3>✅ PAYMENT SUBMITTED!</h3>
                     <p>{{ success }}</p>
-                    <div class="support-buttons">
-                        <a href="{{ whatsapp_link }}" target="_blank" class="btn-whatsapp">
-                            <i class="fab fa-whatsapp"></i> WhatsApp Support
+                    <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1.5rem;">
+                        <a href="{{ url_for('user_dashboard') }}" class="btn-primary" style="width: auto; padding: 0.8rem 2rem;">
+                            <i class="fas fa-tachometer-alt"></i> Go to Dashboard
                         </a>
-                        <a href="{{ telegram_channel }}" target="_blank" class="btn-telegram">
-                            <i class="fab fa-telegram"></i> Telegram Channel
+                        <a href="{{ whatsapp_link }}" target="_blank" class="btn-whatsapp" style="width: auto; padding: 0.8rem 2rem;">
+                            <i class="fab fa-whatsapp"></i> WhatsApp
                         </a>
                     </div>
-                    <p class="note">📢 Message on WhatsApp for quick approval!</p>
                 </div>
                 {% endif %}
                 
@@ -59,13 +58,13 @@
                 {% endif %}
                 
                 {% if not success %}
-                <!-- QR Code Display -->
+                <!-- DYNAMIC QR CODE - Updates based on amount -->
                 <div id="qr-container" class="qr-container">
                     <h3><i class="fas fa-qrcode"></i> Scan to Pay</h3>
                     {% if qr_code %}
-                    <img src="data:image/png;base64,{{ qr_code }}" alt="Payment QR Code">
+                    <img id="qr-image" src="data:image/png;base64,{{ qr_code }}" alt="Payment QR Code" style="max-width: 250px;">
                     {% else %}
-                    <div class="qr-placeholder">QR Code Generating...</div>
+                    <div class="qr-placeholder">Generating QR Code...</div>
                     {% endif %}
                     <p class="amount-display">Amount: ₹<span id="qr-amount">{{ amount or min_recharge }}</span></p>
                     <p class="credits-display-small">You will get: <span id="qr-credits">{{ ((amount or min_recharge) * credit_rate)|round(1) }}</span> Credits</p>
@@ -84,7 +83,8 @@
                     <div class="form-group">
                         <label for="amount"><i class="fas fa-rupee-sign"></i> Enter Amount (₹)</label>
                         <input type="number" id="amount" name="amount" step="1" min="{{ min_recharge }}" 
-                               value="{{ amount or min_recharge }}" required onchange="updateQR(this.value)">
+                               value="{{ amount or min_recharge }}" required onchange="updateQR(this.value)" onkeyup="updateQR(this.value)">
+                        <small>Minimum: ₹{{ min_recharge }}</small>
                     </div>
                     
                     <div class="form-group">
@@ -214,35 +214,21 @@
             box-shadow: 0 10px 20px rgba(0, 136, 204, 0.4);
         }
         
-        .btn-whatsapp, .btn-telegram {
-            display: inline-block;
-            padding: 1rem 2rem;
-            border-radius: 10px;
-            text-decoration: none;
-            color: white;
-            font-weight: bold;
-            margin: 0.5rem;
-            transition: all 0.3s ease;
-        }
-        
         .btn-whatsapp {
             background: #25D366;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
         }
         
         .btn-whatsapp:hover {
             background: #128C7E;
             transform: translateY(-3px);
-            box-shadow: 0 10px 20px rgba(37, 211, 102, 0.3);
-        }
-        
-        .btn-telegram {
-            background: #0088cc;
-        }
-        
-        .btn-telegram:hover {
-            background: #006699;
-            transform: translateY(-3px);
-            box-shadow: 0 10px 20px rgba(0, 136, 204, 0.3);
         }
         
         .upi-id {
@@ -284,18 +270,15 @@
             .upi-id {
                 font-size: 1.2rem;
             }
-            
-            .btn-whatsapp, .btn-telegram {
-                display: block;
-                margin: 0.5rem 0;
-            }
         }
     </style>
 
     <script>
     function updateQR(amount) {
+        amount = parseFloat(amount);
         if (amount < {{ min_recharge }}) {
-            alert(`Minimum amount is ₹{{ min_recharge }}`);
+            document.getElementById('qr-amount').textContent = amount;
+            document.getElementById('qr-credits').textContent = (amount * {{ credit_rate }}).toFixed(1);
             return;
         }
         
@@ -326,6 +309,12 @@
             
             updateQR(amount);
         });
+    });
+    
+    // Initial update
+    window.addEventListener('load', function() {
+        const amount = document.getElementById('amount').value;
+        updateQR(amount);
     });
     </script>
 </body>
