@@ -67,7 +67,7 @@ def init_db():
         conn = get_db_connection()
         c = conn.cursor()
         
-        # Users table - WITH ALL ORIGINAL COLUMNS + NEW DISCORD COLUMNS
+        # Users table
         c.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -82,7 +82,7 @@ def init_db():
             )
         ''')
         
-        # Products table - UNCHANGED
+        # Products table
         c.execute('''
             CREATE TABLE IF NOT EXISTS products (
                 id SERIAL PRIMARY KEY,
@@ -96,7 +96,7 @@ def init_db():
             )
         ''')
         
-        # Licenses table - UNCHANGED
+        # Licenses table
         c.execute('''
             CREATE TABLE IF NOT EXISTS licenses (
                 id SERIAL PRIMARY KEY,
@@ -112,7 +112,7 @@ def init_db():
             )
         ''')
         
-        # Payments table - WITH ALL ORIGINAL COLUMNS
+        # Payments table
         c.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id SERIAL PRIMARY KEY,
@@ -132,7 +132,7 @@ def init_db():
             )
         ''')
         
-        # Custom key types table - UNCHANGED
+        # Custom key types table
         c.execute('''
             CREATE TABLE IF NOT EXISTS key_types (
                 id SERIAL PRIMARY KEY,
@@ -222,39 +222,35 @@ def init_db():
 init_db()
 
 # ============================================
-# ADD MISSING COLUMNS IF NEEDED
+# ADD MISSING COLUMNS
 # ============================================
 
 def add_missing_columns():
-    """Add missing columns to tables"""
     try:
         conn = get_db_connection()
         c = conn.cursor()
         
-        # Check and add discord_id column to users
+        # Check and add discord_id column
         c.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
+            SELECT column_name FROM information_schema.columns 
             WHERE table_name='users' AND column_name='discord_id'
         """)
         if not c.fetchone():
             c.execute("ALTER TABLE users ADD COLUMN discord_id VARCHAR(50) UNIQUE")
-            logging.info("✅ Added discord_id column to users table")
+            logging.info("✅ Added discord_id column")
         
         # Check and add discord_joined_at column
         c.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
+            SELECT column_name FROM information_schema.columns 
             WHERE table_name='users' AND column_name='discord_joined_at'
         """)
         if not c.fetchone():
             c.execute("ALTER TABLE users ADD COLUMN discord_joined_at TIMESTAMP")
-            logging.info("✅ Added discord_joined_at column to users table")
+            logging.info("✅ Added discord_joined_at column")
         
         # Check and add rejection_reason column
         c.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
+            SELECT column_name FROM information_schema.columns 
             WHERE table_name='payments' AND column_name='rejection_reason'
         """)
         if not c.fetchone():
@@ -263,8 +259,7 @@ def add_missing_columns():
         
         # Check and add expiry_time column
         c.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
+            SELECT column_name FROM information_schema.columns 
             WHERE table_name='payments' AND column_name='expiry_time'
         """)
         if not c.fetchone():
@@ -273,8 +268,7 @@ def add_missing_columns():
         
         # Check and add approved_date column
         c.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
+            SELECT column_name FROM information_schema.columns 
             WHERE table_name='payments' AND column_name='approved_date'
         """)
         if not c.fetchone():
@@ -283,8 +277,7 @@ def add_missing_columns():
         
         # Check and add approved_by column
         c.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
+            SELECT column_name FROM information_schema.columns 
             WHERE table_name='payments' AND column_name='approved_by'
         """)
         if not c.fetchone():
@@ -293,8 +286,7 @@ def add_missing_columns():
         
         # Check and add binance_data column
         c.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
+            SELECT column_name FROM information_schema.columns 
             WHERE table_name='payments' AND column_name='binance_data'
         """)
         if not c.fetchone():
@@ -331,98 +323,114 @@ DISCORD_GUILD_ID = os.getenv('DISCORD_GUILD_ID', '1344323930923601992')
 DISCORD_INVITE_LINK = os.getenv('DISCORD_INVITE_LINK', 'https://discord.gg/ATK3JcG7rB')
 
 # ============================================
-# DISCORD VERIFICATION FUNCTION
+# DISCORD VERIFICATION
 # ============================================
 
 def check_discord_membership(discord_user_id):
-    """
-    Check if user is a member of the Discord server using Bot API
-    """
     if not DISCORD_BOT_TOKEN or not DISCORD_GUILD_ID:
         logging.error("❌ Discord Bot Token or Guild ID not configured!")
         if app.debug:
-            logging.warning("⚠️ Development mode: Bypassing Discord check")
             return True
         return False
     
     url = f"https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{discord_user_id}"
-    headers = {
-        "Authorization": f"Bot {DISCORD_BOT_TOKEN}"
-    }
+    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
     
     try:
         response = requests.get(url, headers=headers, timeout=10)
         if response.status_code == 200:
-            logging.info(f"✅ Discord user {discord_user_id} is a member")
             return True
         elif response.status_code == 404:
-            logging.warning(f"❌ Discord user {discord_user_id} is NOT a member")
             return False
         else:
-            logging.error(f"❌ Discord API error: {response.status_code}")
             return False
     except Exception as e:
-        logging.error(f"❌ Error checking Discord membership: {e}")
+        logging.error(f"❌ Discord API error: {e}")
         return False
 
 # ============================================
-# ULTRA DISCOUNT ENGINE - EXACTLY AS YOU WANTED
+# ULTRA DISCOUNT ENGINE - FINAL WORKING VERSION
 # ============================================
 
 def calculate_discounted_credits(base_credit_per_day, days):
     """
     ULTRA DISCOUNT - Works for ANY base price!
-    
-    Your exact example:
-    1 day   → base × 1.0
-    3 days  → base × 1.5   (4*1.5 = 6)
-    7 days  → base × 2.0   (4*2 = 8)
-    15 days → base × 3.0   (4*3 = 12)
-    30 days → base × 4.0   (4*4 = 16)
-    60 days → base × 5.0   (4*5 = 20)
-    90 days → base × 6.0   (4*6 = 24)
+    Based on exact example: 1->4, 3->6, 7->8, 15->12, 30->16, 60->20, 90->24
     """
+    # Debug print
+    print(f"🔥 DISCOUNT DEBUG - Base: {base_credit_per_day}, Days: {days}")
     
     if days == 1:
-        multiplier = 1.0
+        result = base_credit_per_day * 1.0
     elif days == 3:
-        multiplier = 1.5
+        result = base_credit_per_day * 1.5
     elif days == 7:
-        multiplier = 2.0
+        result = base_credit_per_day * 2.0
     elif days == 15:
-        multiplier = 3.0
+        result = base_credit_per_day * 3.0
     elif days == 30:
-        multiplier = 4.0
+        result = base_credit_per_day * 4.0
     elif days == 60:
-        multiplier = 5.0
+        result = base_credit_per_day * 5.0
     elif days == 90:
-        multiplier = 6.0
+        result = base_credit_per_day * 6.0
     else:
-        # For custom days, give proportional discount
-        # Find the closest standard days
-        standard_days = [1, 3, 7, 15, 30, 60, 90]
-        standard_mult = [1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0]
+        # For custom days, interpolate between standard points
+        std_days = [1, 3, 7, 15, 30, 60, 90]
+        std_mult = [1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0]
         
         if days < 1:
-            multiplier = 1.0
+            result = base_credit_per_day
         elif days > 90:
-            # Beyond 90 days, give even better discount
-            multiplier = 6.0 + (days - 90) * 0.02
+            # Beyond 90, continue the trend (approx +0.5 multiplier per 30 days)
+            extra = (days - 90) / 30 * 0.5
+            result = base_credit_per_day * (6.0 + extra)
         else:
-            # Find where this days falls
-            for i in range(len(standard_days)-1):
-                if standard_days[i] < days < standard_days[i+1]:
-                    ratio = (days - standard_days[i]) / (standard_days[i+1] - standard_days[i])
-                    multiplier = standard_mult[i] + ratio * (standard_mult[i+1] - standard_mult[i])
+            # Find interval
+            for i in range(len(std_days)-1):
+                if std_days[i] < days < std_days[i+1]:
+                    ratio = (days - std_days[i]) / (std_days[i+1] - std_days[i])
+                    mult = std_mult[i] + ratio * (std_mult[i+1] - std_mult[i])
+                    result = base_credit_per_day * mult
                     break
             else:
-                multiplier = days * 0.3
+                result = base_credit_per_day * days  # fallback
     
-    total_credits = base_credit_per_day * multiplier
-    return round(total_credits, 2)
+    print(f"🔥 DISCOUNT RESULT: {result}")
+    return round(result, 2)
 
 # ============================================
-# KEY GENERATOR CLASS - YOUR ORIGINAL CODE
+# API ENDPOINT TO GET DISCOUNTED PRICE
+# ============================================
+
+@app.route('/api/discounted_price', methods=['POST'])
+def api_discounted_price():
+    """Return discounted total credits for given product and days"""
+    data = request.get_json()
+    product_id = data.get('product_id')
+    days = int(data.get('days', 1))
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT credit_cost_per_day FROM products WHERE id = %s", (product_id,))
+    product = c.fetchone()
+    conn.close()
+    
+    if not product:
+        return jsonify({'success': False, 'error': 'Product not found'})
+    
+    base = float(product['credit_cost_per_day'])
+    total = calculate_discounted_credits(base, days)
+    
+    return jsonify({
+        'success': True,
+        'total_credits': total,
+        'original_total': base * days,
+        'savings': round((base * days) - total, 2)
+    })
+
+# ============================================
+# KEY GENERATOR CLASS
 # ============================================
 
 class KeyGenerator:
@@ -517,7 +525,7 @@ class KeyGenerator:
 key_gen = KeyGenerator()
 
 # ============================================
-# BINANCE API CLASS - YOUR ORIGINAL CODE
+# BINANCE API CLASS
 # ============================================
 
 class BinanceAPI:
@@ -615,7 +623,7 @@ def format_datetime(dt):
     return str(dt)
 
 # ============================================
-# AUTH ROUTES - YOUR ORIGINAL CODE + DISCORD
+# AUTH ROUTES
 # ============================================
 
 @app.route('/')
@@ -693,7 +701,7 @@ def register():
             c.execute('''
                 INSERT INTO users (username, password, role, credits, discord_id, discord_joined_at)
                 VALUES (%s, %s, %s, %s, %s, %s)
-            ''', (username, hashed, 'user', 0, discord_id, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+            ''', (username, hashed, 'user', 0, discord_id, datetime.now()))
             conn.commit()
             conn.close()
             return redirect(url_for('login'))
@@ -715,7 +723,7 @@ def logout():
     return redirect(url_for('login'))
 
 # ============================================
-# USER DASHBOARD - YOUR ORIGINAL CODE
+# USER DASHBOARD
 # ============================================
 
 @app.route('/dashboard')
@@ -791,7 +799,7 @@ def generate_key_route():
     
     base_credit = float(product['credit_cost_per_day'])
     
-    # ✨ ULTRA DISCOUNT
+    # ULTRA DISCOUNT
     total_credits = calculate_discounted_credits(base_credit, days)
     
     c.execute("SELECT credits FROM users WHERE username = %s", (session['username'],))
@@ -812,7 +820,7 @@ def generate_key_route():
         (key, username, product_name, days, total_credits, expiry_date, status)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
     ''', (key, session['username'], product['name'], days, total_credits,
-          expiry.strftime('%Y-%m-%d %H:%M:%S'), 'active'))
+          expiry, 'active'))
     
     conn.commit()
     conn.close()
@@ -828,7 +836,7 @@ def generate_key_route():
     })
 
 # ============================================
-# PAYMENT ROUTES - YOUR ORIGINAL CODE
+# PAYMENT ROUTES
 # ============================================
 
 @app.route('/payment')
@@ -891,7 +899,7 @@ def upi_payment():
                 (username, payment_method, utr, amount, credits_added, status, date)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             ''', (session['username'], 'upi', utr, amount, credits, 'pending',
-                  datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+                  datetime.now()))
             conn.commit()
             conn.close()
             
@@ -968,8 +976,8 @@ def binance_payment():
                 (username, payment_method, order_id, amount, credits_added, status, date, expiry_time, binance_data)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (session['username'], 'binance', order_id, amount_inr, credits, 'pending',
-                  datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                  expiry_time.strftime('%Y-%m-%d %H:%M:%S'),
+                  datetime.now(),
+                  expiry_time,
                   json.dumps(result)))
             conn.commit()
             conn.close()
@@ -1021,7 +1029,7 @@ def check_binance_payment(order_id):
             c.execute('''
                 UPDATE payments SET status = 'approved', approved_date = %s
                 WHERE order_id = %s
-            ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), order_id))
+            ''', (datetime.now(), order_id))
             
             c.execute('''
                 UPDATE users 
@@ -1074,7 +1082,7 @@ def generate_payment_qr():
     })
 
 # ============================================
-# ADMIN DASHBOARD - YOUR ORIGINAL CODE
+# ADMIN DASHBOARD
 # ============================================
 
 @app.route('/admin')
@@ -1143,7 +1151,7 @@ def admin_dashboard():
                          telegram_channel=TELEGRAM_CHANNEL)
 
 # ============================================
-# ADMIN - PAYMENT ACTIONS - YOUR ORIGINAL CODE
+# ADMIN - PAYMENT ACTIONS
 # ============================================
 
 @app.route('/admin/approve_payment', methods=['POST'])
@@ -1172,7 +1180,7 @@ def approve_payment():
             UPDATE payments 
             SET status = 'approved', approved_date = %s, approved_by = %s, rejection_reason = NULL
             WHERE id = %s
-        ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), session['username'], payment_id))
+        ''', (datetime.now(), session['username'], payment_id))
         
         c.execute('''
             UPDATE users 
@@ -1263,7 +1271,7 @@ def cancel_binance_order():
             conn.close()
 
 # ============================================
-# ADMIN - PRODUCT MANAGEMENT - YOUR ORIGINAL CODE
+# ADMIN - PRODUCT MANAGEMENT
 # ============================================
 
 @app.route('/admin/add_product', methods=['POST'])
@@ -1355,7 +1363,7 @@ def toggle_product():
     return jsonify({'success': True})
 
 # ============================================
-# ADMIN - KEY TYPE MANAGEMENT - YOUR ORIGINAL CODE
+# ADMIN - KEY TYPE MANAGEMENT
 # ============================================
 
 @app.route('/admin/add_key_type', methods=['POST'])
@@ -1382,8 +1390,21 @@ def add_key_type():
         conn.close()
         return jsonify({'success': False, 'error': 'Type name exists'})
 
+@app.route('/admin/get_key_types')
+def get_key_types():
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM key_types ORDER BY type_name")
+    types = c.fetchall()
+    conn.close()
+    
+    return jsonify({'success': True, 'key_types': types})
+
 # ============================================
-# ADMIN - USER MANAGEMENT - YOUR ORIGINAL CODE
+# ADMIN - USER MANAGEMENT
 # ============================================
 
 @app.route('/admin/add_credits', methods=['POST'])
@@ -1443,7 +1464,7 @@ def delete_key():
     return jsonify({'success': True})
 
 # ============================================
-# HWID RESET - YOUR ORIGINAL CODE
+# HWID RESET
 # ============================================
 
 @app.route('/hwid_reset', methods=['POST'])
@@ -1459,7 +1480,7 @@ def hwid_reset():
     c.execute('''
         UPDATE licenses SET last_reset = %s 
         WHERE id = %s AND username = %s
-    ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), license_id, session['username']))
+    ''', (datetime.now(), license_id, session['username']))
     conn.commit()
     conn.close()
     
@@ -1475,7 +1496,7 @@ def hwid_reset_all():
     c.execute('''
         UPDATE licenses SET last_reset = %s 
         WHERE username = %s
-    ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), session['username']))
+    ''', (datetime.now(), session['username']))
     conn.commit()
     conn.close()
     
