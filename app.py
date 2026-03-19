@@ -110,7 +110,7 @@ def init_db():
             )
         ''')
         
-        # Payments table
+        # Payments table - WITH REJECTION_REASON
         c.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id SERIAL PRIMARY KEY,
@@ -218,6 +218,38 @@ def init_db():
         return False
 
 init_db()
+
+# ============================================
+# ADD MISSING COLUMN IF NEEDED
+# ============================================
+
+def add_rejection_column():
+    """Add rejection_reason column if not exists"""
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        
+        # Check if column exists
+        c.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='payments' AND column_name='rejection_reason'
+        """)
+        exists = c.fetchone()
+        
+        if not exists:
+            c.execute("ALTER TABLE payments ADD COLUMN rejection_reason TEXT")
+            conn.commit()
+            logging.info("✅ Added rejection_reason column to payments table")
+        
+        conn.close()
+        return True
+    except Exception as e:
+        logging.error(f"❌ Error adding column: {e}")
+        return False
+
+# Call this after init_db
+add_rejection_column()
 
 # ============================================
 # CONSTANTS
