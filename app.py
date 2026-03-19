@@ -573,6 +573,7 @@ def payment_page():
                          min_recharge=MINIMUM_RECHARGE,
                          credit_rate=CREDIT_RATE,
                          upi_id=UPI_ID,
+                         usd_to_inr=USD_TO_INR,
                          whatsapp_link=WHATSAPP_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
@@ -592,6 +593,7 @@ def upi_payment():
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID,
+                                 usd_to_inr=USD_TO_INR,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         
@@ -601,6 +603,7 @@ def upi_payment():
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID,
+                                 usd_to_inr=USD_TO_INR,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         
@@ -623,6 +626,7 @@ def upi_payment():
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID,
+                                 usd_to_inr=USD_TO_INR,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         except:
@@ -632,6 +636,7 @@ def upi_payment():
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID,
+                                 usd_to_inr=USD_TO_INR,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
     
@@ -643,6 +648,7 @@ def upi_payment():
                          min_recharge=MINIMUM_RECHARGE,
                          credit_rate=CREDIT_RATE,
                          upi_id=UPI_ID,
+                         usd_to_inr=USD_TO_INR,
                          whatsapp_link=WHATSAPP_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
