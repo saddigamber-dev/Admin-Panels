@@ -910,7 +910,7 @@ def admin_dashboard():
                          telegram_channel=TELEGRAM_CHANNEL)
 
 # ============================================
-# ADMIN - PAYMENT ACTIONS (FIXED)
+# ADMIN - PAYMENT ACTIONS
 # ============================================
 
 @app.route('/admin/approve_payment', methods=['POST'])
