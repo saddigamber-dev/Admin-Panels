@@ -15,6 +15,8 @@ import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import socket
+import requests
+import re
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
@@ -27,16 +29,21 @@ bcrypt = Bcrypt(app)
 logging.basicConfig(level=logging.DEBUG)
 
 # ============================================
-# DATABASE CONNECTION
+# DATABASE CONNECTION - SMART URL SELECTOR
 # ============================================
 
+# External URL (for local development)
 EXTERNAL_DATABASE_URL = 'postgresql://admin_panels_user:kRkEd8Zr8wCqJlXUNsnlNvgBqQOgHthi@dpg-d6ts46juibrs73eo0750-a.oregon-postgres.render.com/admin_panels'
+
+# Internal URL (for Render deployment)
 INTERNAL_DATABASE_URL = 'postgresql://admin_panels_user:kRkEd8Zr8wCqJlXUNsnlNvgBqQOgHthi@dpg-d6ts46juibrs73eo0750-a/admin_panels'
 
 def is_running_on_render():
+    """Check if we're running on Render.com"""
     return os.getenv('RENDER', False) or os.getenv('RENDER_EXTERNAL_URL', False)
 
 def get_database_url():
+    """Smartly choose between internal and external URL"""
     if is_running_on_render():
         logging.info("✅ Running on Render - Using INTERNAL database URL")
         return INTERNAL_DATABASE_URL
@@ -45,14 +52,17 @@ def get_database_url():
         return EXTERNAL_DATABASE_URL
 
 def test_database_connection(url):
+    """Test if database URL is reachable"""
     try:
-        import re
+        # Extract hostname from URL for testing
         match = re.search(r'@([^:/]+)', url)
         if match:
             hostname = match.group(1)
+            # Try to resolve hostname
             socket.gethostbyname(hostname)
             logging.info(f"✅ Hostname {hostname} resolved successfully")
         
+        # Try actual connection
         conn = psycopg2.connect(url, connect_timeout=5)
         conn.close()
         logging.info("✅ Database connection successful")
@@ -62,6 +72,7 @@ def test_database_connection(url):
         return False
 
 def get_db_connection():
+    """Get database connection with automatic failover"""
     primary_url = get_database_url()
     
     try:
@@ -74,6 +85,7 @@ def get_db_connection():
     except Exception as e:
         logging.error(f"❌ Primary DB connection failed: {e}")
         
+        # Try fallback URL
         if primary_url == INTERNAL_DATABASE_URL:
             fallback_url = EXTERNAL_DATABASE_URL
         else:
@@ -94,6 +106,7 @@ def get_db_connection():
             raise Exception(f"Database connection failed: {e} / {e2}")
 
 def init_db():
+    """Initialize database tables"""
     try:
         logging.info("🔄 Initializing database...")
         
@@ -118,7 +131,7 @@ def init_db():
             )
         ''')
         
-        # Products table
+        # Products table with custom_key_pattern
         c.execute('''
             CREATE TABLE IF NOT EXISTS products (
                 id SERIAL PRIMARY KEY,
@@ -148,7 +161,7 @@ def init_db():
             )
         ''')
         
-        # Payments table
+        # Payments table (UPI + Binance)
         c.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id SERIAL PRIMARY KEY,
@@ -284,6 +297,8 @@ BINANCE_API_URL = os.getenv('BINANCE_API_URL', 'https://binance-verifier.onrende
 # ============================================
 
 class KeyGenerator:
+    """Generate keys in various formats including custom patterns"""
+    
     def __init__(self):
         self.generators = {
             'fluorite': self._generate_fluorite,
@@ -298,13 +313,18 @@ class KeyGenerator:
         }
     
     def generate_key(self, key_type, custom_pattern=None):
+        """Generate key based on type or custom pattern"""
         if custom_pattern:
             return self._generate_from_pattern(custom_pattern)
+        
         generator = self.generators.get(key_type, self._generate_standard)
         return generator()
     
     def _generate_from_pattern(self, pattern):
+        """Generate key from custom pattern"""
         result = pattern
+        
+        # Replace placeholders
         placeholders = {
             'RANDOM4': lambda: ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4)),
             'RANDOM6': lambda: ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6)),
@@ -330,7 +350,6 @@ class KeyGenerator:
             'DAY': lambda: datetime.now().strftime('%d')
         }
         
-        import re
         for placeholder in re.findall(r'\{([^}]+)\}', result):
             if placeholder in placeholders:
                 result = result.replace(f'{{{placeholder}}}', placeholders[placeholder]())
@@ -385,7 +404,7 @@ class BinanceAPI:
         self.timeout = 30
     
     def _request(self, endpoint, method='GET', data=None):
-        import requests
+        """Make API request to Binance verifier"""
         try:
             url = self.base_url + endpoint
             if method == 'GET':
@@ -403,6 +422,7 @@ class BinanceAPI:
             return {'success': False, 'error': str(e)}
     
     def create_order(self, amount, email=None):
+        """Create new payment order"""
         order_id = f"BNB{int(time.time())}{random.randint(100,999)}"
         return self._request('/api/create-order', 'POST', {
             'orderId': order_id,
@@ -411,24 +431,37 @@ class BinanceAPI:
         })
     
     def verify_payment(self, order_id, amount):
+        """Verify if payment is complete"""
         return self._request('/api/verify', 'POST', {
             'orderId': order_id,
             'amount': float(amount)
         })
     
     def check_order(self, order_id):
+        """Check order status"""
         return self._request(f'/api/check/{order_id}')
     
     def get_qr(self, order_id):
-        return self._request(f'/api/qr/{order_id}')
+        """Get QR code for order with proper formatting"""
+        result = self._request(f'/api/qr/{order_id}')
+        if result and result.get('qr'):
+            # Ensure QR is properly formatted
+            qr_data = result.get('qr')
+            if not qr_data.startswith('data:image'):
+                qr_data = f"data:image/png;base64,{qr_data}"
+            return {'success': True, 'qr': qr_data}
+        return {'success': False, 'qr': None}
     
     def get_address(self, order_id):
+        """Get crypto address for order"""
         return self._request(f'/api/address/{order_id}')
     
     def check_expired(self, order_id):
+        """Check if order expired"""
         return self._request(f'/api/expired/{order_id}')
     
     def cancel_order(self, order_id):
+        """Cancel order"""
         return self._request(f'/api/cancel/{order_id}', 'POST')
 
 binance_api = BinanceAPI()
@@ -438,6 +471,7 @@ binance_api = BinanceAPI()
 # ============================================
 
 def generate_upi_qr(amount):
+    """Generate UPI QR code with proper formatting"""
     try:
         upi_url = f"upi://pay?pa={UPI_ID}&pn={UPI_NAME}&am={amount}&cu=INR"
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
@@ -446,18 +480,21 @@ def generate_upi_qr(amount):
         img = qr.make_image(fill_color="black", back_color="white")
         buffered = BytesIO()
         img.save(buffered, format="PNG")
-        return base64.b64encode(buffered.getvalue()).decode()
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        return f"data:image/png;base64,{img_str}"
     except Exception as e:
         logging.error(f"QR Generation Error: {e}")
         return None
 
 def format_date(date_obj):
-    """Safely format datetime object"""
+    """Safely format datetime object for templates"""
     if date_obj is None:
         return 'N/A'
     if hasattr(date_obj, 'strftime'):
         return date_obj.strftime('%Y-%m-%d %H:%M')
-    return str(date_obj)[:16]
+    if isinstance(date_obj, str):
+        return date_obj[:16]
+    return str(date_obj)
 
 # ============================================
 # ROUTES - AUTHENTICATION
@@ -562,6 +599,7 @@ def user_dashboard():
         conn = get_db_connection()
         c = conn.cursor()
         
+        # Get user
         c.execute("SELECT * FROM users WHERE username = %s", (session['username'],))
         user = c.fetchone()
         
@@ -572,6 +610,7 @@ def user_dashboard():
         
         session['credits'] = float(user['credits'])
         
+        # Get active products
         c.execute('''
             SELECT * FROM products 
             WHERE is_active = TRUE 
@@ -579,6 +618,7 @@ def user_dashboard():
         ''')
         products = c.fetchall()
         
+        # Get user's licenses
         c.execute('''
             SELECT * FROM licenses 
             WHERE username = %s 
@@ -614,6 +654,7 @@ def generate_key_route():
         conn = get_db_connection()
         c = conn.cursor()
         
+        # Get product
         c.execute("SELECT * FROM products WHERE id = %s", (product_id,))
         product = c.fetchone()
         
@@ -623,6 +664,7 @@ def generate_key_route():
         
         total_credits = float(product['credit_cost_per_day']) * days
         
+        # Check user credits
         c.execute("SELECT credits FROM users WHERE username = %s", (session['username'],))
         user_credits = c.fetchone()['credits']
         
@@ -630,14 +672,17 @@ def generate_key_route():
             conn.close()
             return jsonify({'success': False, 'error': f'Need {total_credits} credits'})
         
+        # Generate key using pattern
         key = key_gen.generate_key(product['key_type'], product.get('custom_key_pattern'))
         expiry = datetime.now() + timedelta(days=days)
         
+        # Deduct credits
         c.execute('''
             UPDATE users SET credits = credits - %s 
             WHERE username = %s
         ''', (total_credits, session['username']))
         
+        # Save license
         c.execute('''
             INSERT INTO licenses 
             (key, username, product_name, days, total_credits, expiry_date, status)
@@ -702,11 +747,12 @@ def hwid_reset_all():
         return jsonify({'success': False, 'error': str(e)})
 
 # ============================================
-# ROUTES - PAYMENT
+# ROUTES - PAYMENT (UPI + BINANCE)
 # ============================================
 
 @app.route('/payment')
 def payment_page():
+    """Payment page with method selection"""
     if 'username' not in session:
         return redirect(url_for('login'))
     
@@ -719,6 +765,7 @@ def payment_page():
 
 @app.route('/payment/upi', methods=['GET', 'POST'])
 def upi_payment():
+    """UPI Manual Payment - FIXED QR"""
     if 'username' not in session:
         return redirect(url_for('login'))
     
@@ -778,6 +825,7 @@ def upi_payment():
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID)
     
+    # GET request
     qr = generate_upi_qr(MINIMUM_RECHARGE)
     return render_template('upi_payment.html',
                          qr_code=qr,
@@ -787,6 +835,7 @@ def upi_payment():
 
 @app.route('/payment/binance', methods=['GET', 'POST'])
 def binance_payment():
+    """Binance Crypto Payment - AUTO CREDITS with FIXED QR"""
     if 'username' not in session:
         return redirect(url_for('login'))
     
@@ -797,14 +846,18 @@ def binance_payment():
             return render_template('binance_payment.html',
                                  error=f'Minimum ₹{MINIMUM_RECHARGE}',
                                  min_recharge=MINIMUM_RECHARGE,
-                                 credit_rate=CREDIT_RATE)
+                                 credit_rate=CREDIT_RATE,
+                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_channel=TELEGRAM_CHANNEL)
         
+        # Create Binance order
         result = binance_api.create_order(amount, f"{session['username']}@user.com")
         
         if result and result.get('success'):
             order_id = result.get('orderId')
             credits = amount * CREDIT_RATE
             
+            # Save to database
             conn = get_db_connection()
             c = conn.cursor()
             c.execute('''
@@ -817,6 +870,7 @@ def binance_payment():
             conn.commit()
             conn.close()
             
+            # Get QR and address
             qr_data = binance_api.get_qr(order_id)
             address_data = binance_api.get_address(order_id)
             
@@ -828,39 +882,51 @@ def binance_payment():
                                  address=address_data.get('address') if address_data else None,
                                  binance_data=result,
                                  min_recharge=MINIMUM_RECHARGE,
-                                 credit_rate=CREDIT_RATE)
+                                 credit_rate=CREDIT_RATE,
+                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_channel=TELEGRAM_CHANNEL)
         else:
             return render_template('binance_payment.html',
                                  error='Binance service unavailable. Please try UPI.',
                                  min_recharge=MINIMUM_RECHARGE,
-                                 credit_rate=CREDIT_RATE)
+                                 credit_rate=CREDIT_RATE,
+                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_channel=TELEGRAM_CHANNEL)
     
+    # GET request
     return render_template('binance_payment.html',
                          min_recharge=MINIMUM_RECHARGE,
-                         credit_rate=CREDIT_RATE)
+                         credit_rate=CREDIT_RATE,
+                         whatsapp_link=WHATSAPP_LINK,
+                         telegram_channel=TELEGRAM_CHANNEL)
 
 @app.route('/payment/binance/check/<order_id>')
 def check_binance_payment(order_id):
+    """Check Binance payment status - AUTO CREDIT on success"""
     if 'username' not in session:
         return jsonify({'success': False, 'error': 'Not logged in'})
     
     try:
+        # Check with Binance API
         result = binance_api.check_order(order_id)
         
         if result and result.get('status') == 'completed':
             conn = get_db_connection()
             c = conn.cursor()
             
+            # Get payment record
             c.execute("SELECT * FROM payments WHERE order_id = %s", (order_id,))
             payment = c.fetchone()
             
             if payment and payment['status'] == 'pending':
+                # Update payment
                 c.execute('''
                     UPDATE payments 
                     SET status = 'approved', approved_date = %s
                     WHERE order_id = %s
                 ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), order_id))
                 
+                # Add credits to user
                 c.execute('''
                     UPDATE users 
                     SET credits = credits + %s, total_recharged = total_recharged + %s
@@ -870,6 +936,7 @@ def check_binance_payment(order_id):
                 conn.commit()
                 conn.close()
                 
+                # Update session
                 session['credits'] = session.get('credits', 0) + payment['credits_added']
                 
                 return jsonify({
@@ -891,6 +958,7 @@ def check_binance_payment(order_id):
 
 @app.route('/generate_payment_qr', methods=['POST'])
 def generate_payment_qr():
+    """Generate UPI QR for amount - FIXED"""
     try:
         if 'username' not in session:
             return jsonify({'success': False, 'error': 'Not logged in'})
@@ -922,6 +990,7 @@ def generate_payment_qr():
 
 @app.route('/admin')
 def admin_dashboard():
+    """Admin dashboard"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return redirect(url_for('login'))
@@ -929,6 +998,7 @@ def admin_dashboard():
         conn = get_db_connection()
         c = conn.cursor()
         
+        # Stats
         c.execute("SELECT COUNT(*) FROM users WHERE role = 'user'")
         total_users = c.fetchone()['count']
         
@@ -944,21 +1014,26 @@ def admin_dashboard():
         c.execute("SELECT COUNT(*) FROM licenses WHERE status = 'active'")
         active_keys = c.fetchone()['count']
         
+        # Users
         c.execute("SELECT * FROM users WHERE role != 'admin' ORDER BY credits DESC")
         users = c.fetchall()
         
+        # Payments
         c.execute('''
             SELECT * FROM payments 
             ORDER BY CASE status WHEN 'pending' THEN 1 ELSE 2 END, date DESC
         ''')
         payments = c.fetchall()
         
+        # Licenses
         c.execute("SELECT * FROM licenses ORDER BY expiry_date DESC LIMIT 100")
         licenses = c.fetchall()
         
+        # Products
         c.execute("SELECT * FROM products ORDER BY name")
         products = c.fetchall()
         
+        # Key types
         c.execute("SELECT * FROM key_types ORDER BY type_name")
         key_types = c.fetchall()
         
@@ -984,12 +1059,22 @@ def admin_dashboard():
         traceback.print_exc()
         return render_template('error.html', error=f"Admin error: {str(e)}")
 
+@app.route('/admin/track_binance/<order_id>')
+def track_binance(order_id):
+    """Admin track specific Binance order"""
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    result = binance_api.check_order(order_id)
+    return jsonify(result)
+
 # ============================================
 # ADMIN - PAYMENT MANAGEMENT
 # ============================================
 
 @app.route('/admin/approve_payment', methods=['POST'])
 def approve_payment():
+    """Approve UPI payment (manual)"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return jsonify({'success': False, 'error': 'Unauthorized'})
@@ -1000,6 +1085,7 @@ def approve_payment():
         conn = get_db_connection()
         c = conn.cursor()
         
+        # Get payment
         c.execute("SELECT * FROM payments WHERE id = %s", (payment_id,))
         payment = c.fetchone()
         
@@ -1007,12 +1093,14 @@ def approve_payment():
             conn.close()
             return jsonify({'success': False, 'error': 'Payment not found'})
         
+        # Update payment
         c.execute('''
             UPDATE payments 
             SET status = 'approved', approved_date = %s, approved_by = %s
             WHERE id = %s
         ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), session['username'], payment_id))
         
+        # Add credits to user
         c.execute('''
             UPDATE users 
             SET credits = credits + %s, total_recharged = total_recharged + %s
@@ -1030,6 +1118,7 @@ def approve_payment():
 
 @app.route('/admin/reject_payment', methods=['POST'])
 def reject_payment():
+    """Reject UPI payment"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return jsonify({'success': False, 'error': 'Unauthorized'})
@@ -1057,6 +1146,7 @@ def reject_payment():
 
 @app.route('/admin/add_product', methods=['POST'])
 def add_product():
+    """Add product with optional custom key pattern"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return jsonify({'success': False, 'error': 'Unauthorized'})
@@ -1091,6 +1181,7 @@ def add_product():
 
 @app.route('/admin/edit_product', methods=['POST'])
 def edit_product():
+    """Edit product"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return jsonify({'success': False, 'error': 'Unauthorized'})
@@ -1122,6 +1213,7 @@ def edit_product():
 
 @app.route('/admin/delete_product', methods=['POST'])
 def delete_product():
+    """Delete product"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return jsonify({'success': False, 'error': 'Unauthorized'})
@@ -1143,6 +1235,7 @@ def delete_product():
 
 @app.route('/admin/toggle_product', methods=['POST'])
 def toggle_product():
+    """Enable/disable product"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return jsonify({'success': False, 'error': 'Unauthorized'})
@@ -1169,6 +1262,7 @@ def toggle_product():
 
 @app.route('/admin/add_key_type', methods=['POST'])
 def add_key_type():
+    """Add custom key type with pattern"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return jsonify({'success': False, 'error': 'Unauthorized'})
@@ -1198,6 +1292,7 @@ def add_key_type():
 
 @app.route('/admin/get_key_types')
 def get_key_types():
+    """Get all key types"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return jsonify({'success': False, 'error': 'Unauthorized'})
@@ -1220,6 +1315,7 @@ def get_key_types():
 
 @app.route('/admin/add_credits', methods=['POST'])
 def add_credits():
+    """Admin add credits to user"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return jsonify({'success': False, 'error': 'Unauthorized'})
@@ -1247,6 +1343,7 @@ def add_credits():
 
 @app.route('/admin/delete_user', methods=['POST'])
 def delete_user():
+    """Delete user and all their data"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return jsonify({'success': False, 'error': 'Unauthorized'})
@@ -1270,6 +1367,7 @@ def delete_user():
 
 @app.route('/admin/delete_key', methods=['POST'])
 def delete_key():
+    """Delete a license key"""
     try:
         if 'username' not in session or session.get('role') != 'admin':
             return jsonify({'success': False, 'error': 'Unauthorized'})
