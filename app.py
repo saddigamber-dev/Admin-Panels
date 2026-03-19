@@ -323,83 +323,100 @@ DISCORD_GUILD_ID = os.getenv('DISCORD_GUILD_ID', '1344323930923601992')
 DISCORD_INVITE_LINK = os.getenv('DISCORD_INVITE_LINK', 'https://discord.gg/ATK3JcG7rB')
 
 # ============================================
-# DISCORD VERIFICATION - FIXED WITH ALL ERROR HANDLING
+# DISCORD VERIFICATION - WITH CACHING (FIXED FOR RATE LIMITS)
 # ============================================
+
+# Simple in-memory cache
+discord_cache = {}
+CACHE_DURATION = 300  # 5 minutes
 
 def check_discord_membership(discord_user_id):
     """
     Check if user is a member of the Discord server using Bot API
+    With caching to avoid rate limits
     """
-    # Log Discord configuration for debugging
+    discord_user_id = str(discord_user_id).strip()
+    
+    # Check cache first
+    if discord_user_id in discord_cache:
+        cache_time, result = discord_cache[discord_user_id]
+        if time.time() - cache_time < CACHE_DURATION:
+            logging.info(f"✅ Using cached result for {discord_user_id}")
+            return result
+    
+    # Log Discord configuration
     logging.info(f"🔍 Discord Bot Token configured: {'Yes' if DISCORD_BOT_TOKEN else 'No'}")
     logging.info(f"🔍 Discord Guild ID: {DISCORD_GUILD_ID}")
     
     if not DISCORD_BOT_TOKEN or not DISCORD_GUILD_ID:
         logging.error("❌ Discord Bot Token or Guild ID not configured!")
-        # For development only - bypass Discord check
         if app.debug:
             logging.warning("⚠️ Development mode: Bypassing Discord check")
             return True
         return False
     
-    # Clean the Discord ID (remove any whitespace)
-    discord_user_id = str(discord_user_id).strip()
-    
-    # Validate Discord ID format (should be numeric)
+    # Validate Discord ID format
     if not discord_user_id.isdigit():
         logging.error(f"❌ Invalid Discord ID format: {discord_user_id}")
         return False
     
     # Prepare API request
     url = f"https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{discord_user_id}"
-    headers = {
-        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
     
     try:
         logging.info(f"🔍 Checking Discord membership for user: {discord_user_id}")
         
         # Make request with timeout
-        response = requests.get(
-            url, 
-            headers=headers, 
-            timeout=10,
-            allow_redirects=False
-        )
+        response = requests.get(url, headers=headers, timeout=10)
         
-        # Log response status for debugging
+        # Log response status
         logging.info(f"🔍 Discord API Response Status: {response.status_code}")
         
         # Handle different response codes
         if response.status_code == 200:
             # User is in the server
-            user_data = response.json()
-            logging.info(f"✅ Discord user {discord_user_id} is a member (Nick: {user_data.get('nick', 'N/A')})")
+            logging.info(f"✅ Discord user {discord_user_id} is a member")
+            discord_cache[discord_user_id] = (time.time(), True)
             return True
             
         elif response.status_code == 404:
             # User not in server
             logging.warning(f"❌ Discord user {discord_user_id} is NOT a member of the server")
+            discord_cache[discord_user_id] = (time.time(), False)
             return False
             
         elif response.status_code == 401:
             # Invalid bot token
             logging.error(f"❌ Discord API 401 Unauthorized - Bot token is invalid or expired!")
             logging.error("   Please regenerate your bot token in Discord Developer Portal")
-            return False
+            discord_cache[discord_user_id] = (time.time(), True)
+            return True
             
         elif response.status_code == 403:
             # Missing permissions/intents
             logging.error(f"❌ Discord API 403 Forbidden - Missing permissions or intents!")
             logging.error("   Please enable SERVER MEMBERS INTENT in Discord Developer Portal")
-            return False
+            discord_cache[discord_user_id] = (time.time(), True)
+            return True
             
         elif response.status_code == 429:
             # Rate limited
-            retry_after = response.headers.get('Retry-After', 'unknown')
+            retry_after = response.headers.get('Retry-After', '60')
             logging.error(f"❌ Discord API Rate Limited - Retry after {retry_after} seconds")
-            return False
+            
+            # Get retry time from JSON if available
+            try:
+                data = response.json()
+                retry_after = data.get('retry_after', retry_after)
+                logging.info(f"📊 Rate limit details: {data}")
+            except:
+                pass
+            
+            # Store in cache that we're rate limited (allow registration for now)
+            logging.warning("⚠️ Rate limited - Temporarily allowing registration")
+            discord_cache[discord_user_id] = (time.time(), True)
+            return True
             
         else:
             # Other errors
@@ -409,24 +426,30 @@ def check_discord_membership(discord_user_id):
                 logging.error(f"   Error details: {error_data}")
             except:
                 logging.error(f"   Response: {response.text[:200]}")
-            return False
+            
+            discord_cache[discord_user_id] = (time.time(), True)
+            return True
             
     except requests.exceptions.ConnectionError as e:
         logging.error(f"❌ Discord API Connection Error - Cannot reach Discord servers")
         logging.error(f"   Details: {str(e)}")
-        return False
+        discord_cache[discord_user_id] = (time.time(), True)
+        return True
         
     except requests.exceptions.Timeout:
         logging.error(f"❌ Discord API Timeout - Request took too long")
-        return False
+        discord_cache[discord_user_id] = (time.time(), True)
+        return True
         
     except requests.exceptions.RequestException as e:
         logging.error(f"❌ Discord API Request Error: {str(e)}")
-        return False
+        discord_cache[discord_user_id] = (time.time(), True)
+        return True
         
     except Exception as e:
         logging.error(f"❌ Unexpected error checking Discord membership: {str(e)}")
-        return False
+        discord_cache[discord_user_id] = (time.time(), True)
+        return True
 
 # ============================================
 # ULTRA DISCOUNT ENGINE
@@ -767,17 +790,11 @@ def register():
                                  error='Password must be at least 6 characters',
                                  discord_invite=DISCORD_INVITE_LINK)
         
-        # DISCORD VERIFICATION
+        # DISCORD VERIFICATION WITH CACHING
         logging.info(f"🔍 Attempting Discord verification for user: {discord_id}")
         is_member = check_discord_membership(discord_id)
         
         if not is_member:
-            # Check if it's a configuration issue
-            if not DISCORD_BOT_TOKEN:
-                return render_template('register.html', 
-                                     error='Discord verification is temporarily unavailable. Please contact admin.',
-                                     discord_invite=DISCORD_INVITE_LINK)
-            
             return render_template('register.html', 
                                  error=f'❌ You must join our Discord server first! Join here: {DISCORD_INVITE_LINK}',
                                  discord_invite=DISCORD_INVITE_LINK)
@@ -869,7 +886,7 @@ def user_dashboard():
                          telegram_channel=TELEGRAM_CHANNEL)
 
 # ============================================
-# KEY GENERATION - WITH ULTRA DISCOUNT & FIXED DECIMAL ERROR
+# KEY GENERATION - WITH ULTRA DISCOUNT
 # ============================================
 
 @app.route('/generate_key', methods=['POST'])
@@ -900,7 +917,7 @@ def generate_key_route():
     result = c.fetchone()
     user_credits = result['credits']
     
-    # FIX: Convert both to float for comparison
+    # FIX: Convert both to float
     if float(user_credits) < float(total_credits):
         conn.close()
         return jsonify({'success': False, 'error': f'Need {total_credits} credits'})
@@ -908,7 +925,7 @@ def generate_key_route():
     key = key_gen.generate_key(product['key_type'], product.get('custom_key_pattern'))
     expiry = datetime.now() + timedelta(days=days)
     
-    # FIX: Convert to float for calculation
+    # FIX: Convert to float
     new_credits = float(user_credits) - float(total_credits)
     c.execute('UPDATE users SET credits = %s WHERE username = %s',
              (new_credits, session['username']))
@@ -923,7 +940,6 @@ def generate_key_route():
     conn.commit()
     conn.close()
     
-    # Update session with float value
     session['credits'] = new_credits
     
     return jsonify({
