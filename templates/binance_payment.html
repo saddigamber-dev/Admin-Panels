@@ -40,78 +40,175 @@
                     <p>Credits: <strong class="neon-text-green">{{ credits }}</strong></p>
                 </div>
                 
-                <!-- QR Code -->
+                <!-- QR Code - FIXED SETTLEMENT -->
                 {% if qr_code %}
-                <div class="qr-container">
-                    <img src="data:image/png;base64,{{ qr_code }}" alt="Binance QR" style="max-width: 250px;">
-                    <p>Scan with Binance app</p>
+                <div class="qr-container" style="text-align: center; padding: 2rem;">
+                    <h3><i class="fas fa-qrcode"></i> Scan with Binance App</h3>
+                    {% if qr_code.startswith('data:image') %}
+                        <img src="{{ qr_code }}" alt="Binance QR" style="max-width: 280px; border: 4px solid white; border-radius: 20px; padding: 10px; background: white;">
+                    {% else %}
+                        <img src="data:image/png;base64,{{ qr_code }}" alt="Binance QR" style="max-width: 280px; border: 4px solid white; border-radius: 20px; padding: 10px; background: white;">
+                    {% endif %}
+                    <p class="amount-display" style="margin-top: 1rem;">Amount: ₹{{ amount }}</p>
                 </div>
                 {% endif %}
                 
-                <!-- Address -->
+                <!-- Address - FIXED -->
                 {% if address %}
-                <div style="text-align: center; margin: 1rem 0; padding: 1rem; background: rgba(0,0,0,0.5); border-radius: 10px;">
-                    <p>Or send to address:</p>
-                    <code style="word-break: break-all;">{{ address }}</code>
+                <div style="text-align: center; margin: 1.5rem 0; padding: 1.5rem; background: rgba(0,0,0,0.5); border-radius: 15px; border: 1px solid var(--accent-green);">
+                    <p><i class="fas fa-wallet"></i> <strong>Or send to address:</strong></p>
+                    <code style="word-break: break-all; font-size: 1rem; background: rgba(0,0,0,0.7); padding: 1rem; display: block; border-radius: 10px; margin-top: 0.5rem;">{{ address }}</code>
+                    <button class="btn-small" style="margin-top: 1rem;" onclick="copyToClipboard('{{ address }}')">
+                        <i class="fas fa-copy"></i> Copy Address
+                    </button>
                 </div>
                 {% endif %}
                 
-                <!-- Auto-check Status -->
+                <!-- Auto-check Status - IMPROVED -->
                 <div style="text-align: center; margin: 2rem 0;" id="payment-status">
-                    <p><i class="fas fa-spinner fa-spin"></i> Waiting for payment...</p>
-                    <div style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden;">
-                        <div style="height: 100%; width: 0%; background: var(--accent-green);" id="progress-bar"></div>
+                    <div style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 15px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent-yellow);"></i>
+                        <p style="margin-top: 1rem; font-size: 1.2rem;">Waiting for payment confirmation...</p>
+                        <p style="color: var(--text-secondary);">This page will auto-refresh when payment is received</p>
+                        <div style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden; margin-top: 1.5rem;">
+                            <div style="height: 100%; width: 0%; background: var(--accent-green);" id="progress-bar"></div>
+                        </div>
+                        <p style="margin-top: 1rem;" id="check-status">Checking payment status...</p>
                     </div>
+                </div>
+                
+                <!-- Manual Check Button -->
+                <div style="text-align: center; margin-top: 1rem;">
+                    <button class="btn-secondary" onclick="checkPayment()" style="width: auto; padding: 0.8rem 2rem;">
+                        <i class="fas fa-sync-alt"></i> Check Status Manually
+                    </button>
                 </div>
                 
                 <script>
                 let checkCount = 0;
+                let checkInterval;
+                
+                function copyToClipboard(text) {
+                    navigator.clipboard.writeText(text).then(function() {
+                        alert('Address copied to clipboard!');
+                    }, function() {
+                        alert('Failed to copy address');
+                    });
+                }
+                
+                function updateProgress() {
+                    checkCount++;
+                    let progress = Math.min(checkCount * 5, 90);
+                    document.getElementById('progress-bar').style.width = progress + '%';
+                    document.getElementById('check-status').innerHTML = `Checking... (${checkCount})`;
+                }
+                
                 function checkPayment() {
                     fetch('/payment/binance/check/{{ order_id }}')
                         .then(r => r.json())
                         .then(data => {
                             if (data.success) {
                                 if (data.status === 'completed') {
+                                    // Payment completed!
+                                    clearInterval(checkInterval);
                                     document.getElementById('payment-status').innerHTML = `
-                                        <div class="success-message">
-                                            <i class="fas fa-check-circle" style="font-size: 3rem;"></i>
-                                            <h3>✅ PAYMENT RECEIVED!</h3>
-                                            <p>{{ credits }} Credits added to your account!</p>
-                                            <a href="{{ url_for('user_dashboard') }}" class="btn-primary">Go to Dashboard</a>
+                                        <div class="success-message" style="animation: none;">
+                                            <i class="fas fa-check-circle" style="font-size: 4rem; color: var(--accent-green);"></i>
+                                            <h2 style="color: var(--accent-green); margin: 1rem 0;">✅ PAYMENT RECEIVED!</h2>
+                                            <p style="font-size: 1.5rem;">${data.credits} Credits added to your account!</p>
+                                            <div style="margin-top: 2rem;">
+                                                <a href="{{ url_for('user_dashboard') }}" class="btn-primary" style="width: auto; padding: 1rem 3rem;">
+                                                    <i class="fas fa-tachometer-alt"></i> Go to Dashboard
+                                                </a>
+                                            </div>
                                         </div>
                                     `;
+                                } else if (data.status === 'expired') {
+                                    document.getElementById('payment-status').innerHTML = `
+                                        <div class="error-message">
+                                            <i class="fas fa-clock"></i>
+                                            <h3>⚠️ Payment Expired</h3>
+                                            <p>Order expired. Please create a new payment.</p>
+                                            <a href="{{ url_for('binance_payment') }}" class="btn-primary" style="margin-top: 1rem;">
+                                                <i class="fas fa-redo"></i> Try Again
+                                            </a>
+                                        </div>
+                                    `;
+                                    clearInterval(checkInterval);
                                 } else {
-                                    checkCount++;
-                                    let progress = Math.min(checkCount * 10, 90);
-                                    document.getElementById('progress-bar').style.width = progress + '%';
-                                    setTimeout(checkPayment, 5000);
+                                    updateProgress();
                                 }
                             }
+                        })
+                        .catch(error => {
+                            console.error('Check error:', error);
                         });
                 }
-                setTimeout(checkPayment, 5000);
+                
+                // Start checking every 5 seconds
+                checkInterval = setInterval(checkPayment, 5000);
+                
+                // Immediate first check
+                setTimeout(checkPayment, 2000);
                 </script>
                 
                 {% else %}
                 <!-- Amount Form -->
                 <form method="POST">
                     <div class="form-group">
-                        <label>Amount (₹) - Minimum ₹{{ min_recharge }}</label>
-                        <input type="number" name="amount" min="{{ min_recharge }}" step="1" required>
+                        <label><i class="fas fa-rupee-sign"></i> Amount (₹) - Minimum ₹{{ min_recharge }}</label>
+                        <input type="number" name="amount" min="{{ min_recharge }}" step="1" required placeholder="Enter amount" id="amount-input">
                     </div>
                     
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1rem 0;">
-                        <button type="button" class="btn-secondary" onclick="this.form.amount.value=1000">₹1000</button>
-                        <button type="button" class="btn-secondary" onclick="this.form.amount.value=2000">₹2000</button>
-                        <button type="button" class="btn-secondary" onclick="this.form.amount.value=5000">₹5000</button>
-                        <button type="button" class="btn-secondary" onclick="this.form.amount.value=10000">₹10000</button>
+                    <!-- Quick Amount Buttons -->
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0;">
+                        <button type="button" class="btn-secondary" onclick="document.getElementById('amount-input').value=1000">₹1000</button>
+                        <button type="button" class="btn-secondary" onclick="document.getElementById('amount-input').value=2000">₹2000</button>
+                        <button type="button" class="btn-secondary" onclick="document.getElementById('amount-input').value=5000">₹5000</button>
+                        <button type="button" class="btn-secondary" onclick="document.getElementById('amount-input').value=10000">₹10000</button>
+                    </div>
+                    
+                    <!-- Credits Preview -->
+                    <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 10px; margin-bottom: 1.5rem; text-align: center;">
+                        <p>You will get: <strong class="neon-text-green" id="credit-preview">0</strong> Credits</p>
                     </div>
                     
                     <button type="submit" class="btn-primary" style="background: linear-gradient(145deg, #f0b90b, #d4a00a);">
                         <i class="fab fa-bitcoin"></i> Create Binance Order
                     </button>
                 </form>
+                
+                <script>
+                // Update credit preview
+                document.getElementById('amount-input')?.addEventListener('input', function() {
+                    let amount = parseFloat(this.value) || 0;
+                    let credits = amount * {{ credit_rate }};
+                    document.getElementById('credit-preview').textContent = credits.toFixed(1);
+                });
+                
+                // Set initial preview
+                window.addEventListener('load', function() {
+                    let amount = document.getElementById('amount-input')?.value || 0;
+                    let credits = amount * {{ credit_rate }};
+                    document.getElementById('credit-preview').textContent = credits.toFixed(1);
+                });
+                </script>
                 {% endif %}
+                
+                <!-- Support Section -->
+                <div class="support-section" style="margin-top: 2rem;">
+                    <h3><i class="fas fa-headset"></i> Need Help?</h3>
+                    <div class="support-grid">
+                        <a href="{{ whatsapp_link }}" target="_blank" class="support-card whatsapp">
+                            <i class="fab fa-whatsapp"></i>
+                            <span>WhatsApp Support</span>
+                        </a>
+                        <a href="{{ telegram_channel }}" target="_blank" class="support-card telegram">
+                            <i class="fab fa-telegram"></i>
+                            <span>Telegram Channel</span>
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
