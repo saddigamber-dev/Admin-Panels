@@ -95,7 +95,7 @@
                                 <td>₹{{ user.total_recharged or 0 }}</td>
                                 <td>
                                     {% if user.created_at %}
-                                        {{ user.created_at.strftime('%Y-%m-%d') if user.created_at.strftime else user.created_at[:10] }}
+                                        {{ user.created_at[:10] }}
                                     {% else %}
                                         N/A
                                     {% endif %}
@@ -119,7 +119,7 @@
             </div>
         </div>
 
-        <!-- PAYMENTS TAB -->
+        <!-- PAYMENTS TAB - COMPLETE FIXED VERSION -->
         <div id="payments-tab" class="tab-content">
             <div class="card">
                 <h2><i class="fas fa-credit-card"></i> Payment Requests</h2>
@@ -142,7 +142,7 @@
                             <tr>
                                 <td>
                                     {% if payment.payment_method == 'binance' %}
-                                    <span class="key-type-badge" style="background: #f0b90b;">BINANCE</span>
+                                    <span class="key-type-badge" style="background: #f0b90b; color: black;">BINANCE</span>
                                     {% else %}
                                     <span class="key-type-badge">UPI</span>
                                     {% endif %}
@@ -155,7 +155,7 @@
                                 <td>{{ payment.credits_added }}</td>
                                 <td>
                                     {% if payment.date %}
-                                        {{ payment.date.strftime('%Y-%m-%d %H:%M') if payment.date.strftime else payment.date[:16] }}
+                                        {{ payment.date[:16] }}
                                     {% else %}
                                         N/A
                                     {% endif %}
@@ -166,16 +166,40 @@
                                     </span>
                                 </td>
                                 <td>
-                                    {% if payment.status == 'pending' and payment.payment_method == 'upi' %}
-                                    <button class="btn-small btn-approve-payment" data-payment-id="{{ payment.id }}">
-                                        <i class="fas fa-check-circle"></i> Approve
-                                    </button>
-                                    <button class="btn-small btn-danger btn-reject-payment" data-payment-id="{{ payment.id }}">
-                                        <i class="fas fa-times-circle"></i> Reject
-                                    </button>
-                                    {% elif payment.status == 'pending' and payment.payment_method == 'binance' %}
-                                    <span class="status-badge">Auto-processing</span>
+                                    {% if payment.status == 'pending' %}
+                                        {% if payment.payment_method == 'upi' %}
+                                        <button class="btn-small btn-approve-payment" data-payment-id="{{ payment.id }}">
+                                            <i class="fas fa-check-circle"></i> Approve
+                                        </button>
+                                        <button class="btn-small btn-danger btn-reject-payment" data-payment-id="{{ payment.id }}">
+                                            <i class="fas fa-times-circle"></i> Reject
+                                        </button>
+                                        {% elif payment.payment_method == 'binance' %}
+                                        <!-- Binance ke liye bhi REJECT button -->
+                                        <button class="btn-small btn-danger btn-reject-payment" data-payment-id="{{ payment.id }}">
+                                            <i class="fas fa-times-circle"></i> Reject
+                                        </button>
+                                        <button class="btn-small btn-cancel-binance" data-order-id="{{ payment.order_id }}" style="background: #ff9800; color: white;">
+                                            <i class="fas fa-ban"></i> Cancel
+                                        </button>
+                                        {% endif %}
+                                    {% elif payment.status == 'approved' %}
+                                        <span class="status-badge status-active">Approved</span>
+                                        {% if payment.approved_by %}
+                                        <br><small>by {{ payment.approved_by }}</small>
+                                        {% endif %}
+                                    {% elif payment.status == 'rejected' %}
+                                        <span class="status-badge status-inactive">Rejected</span>
+                                        {% if payment.rejection_reason %}
+                                        <br><small style="color: var(--accent-red);">{{ payment.rejection_reason }}</small>
+                                        {% endif %}
                                     {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="8" style="text-align: center; color: var(--text-secondary);">
+                                    No payment requests found
                                 </td>
                             </tr>
                             {% endfor %}
@@ -211,13 +235,7 @@
                                 <td>{{ license.product_name }}</td>
                                 <td>{{ license.days }} days</td>
                                 <td>{{ license.total_credits }}</td>
-                                <td>
-                                    {% if license.expiry_date %}
-                                        {{ license.expiry_date.strftime('%Y-%m-%d') if license.expiry_date.strftime else license.expiry_date[:10] }}
-                                    {% else %}
-                                        N/A
-                                    {% endif %}
-                                </td>
+                                <td>{{ license.expiry_date[:16] }}</td>
                                 <td>
                                     <span class="status-badge status-{{ license.status }}">
                                         {{ license.status }}
@@ -337,7 +355,7 @@
             </div>
         </div>
 
-        <!-- KEY TYPES TAB - FIXED -->
+        <!-- KEY TYPES TAB -->
         <div id="keytypes-tab" class="tab-content">
             <div class="card">
                 <h2><i class="fas fa-cog"></i> Key Types Management</h2>
@@ -375,7 +393,7 @@
                     </div>
                 </div>
                 
-                <!-- Key Types Table - FIXED HERE -->
+                <!-- Key Types Table -->
                 <div class="table-container">
                     <table>
                         <thead>
@@ -394,11 +412,7 @@
                                 <td>{{ key_type.description }}</td>
                                 <td>
                                     {% if key_type.created_at %}
-                                        {% if key_type.created_at.strftime %}
-                                            {{ key_type.created_at.strftime('%Y-%m-%d') }}
-                                        {% else %}
-                                            {{ key_type.created_at[:10] }}
-                                        {% endif %}
+                                        {{ key_type.created_at[:10] }}
                                     {% else %}
                                         N/A
                                     {% endif %}
@@ -510,76 +524,11 @@
         }
         .flex { display: flex; }
         .gap-2 { gap: 1rem; }
+        .btn-cancel-binance:hover {
+            background: #e68900 !important;
+        }
     </style>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script>
-        // Show/hide custom pattern field
-        document.getElementById('new-product-keytype')?.addEventListener('change', function() {
-            const customGroup = document.getElementById('custom-pattern-group');
-            if (this.value === 'custom') {
-                customGroup.style.display = 'block';
-            } else {
-                customGroup.style.display = 'none';
-            }
-        });
-        
-        // Add Key Type
-        document.getElementById('add-keytype-btn')?.addEventListener('click', function() {
-            document.getElementById('add-keytype-form').style.display = 'block';
-        });
-        
-        document.getElementById('cancel-keytype')?.addEventListener('click', function() {
-            document.getElementById('add-keytype-form').style.display = 'none';
-        });
-        
-        document.getElementById('save-keytype')?.addEventListener('click', function() {
-            const name = document.getElementById('new-keytype-name').value;
-            const pattern = document.getElementById('new-keytype-pattern').value;
-            const desc = document.getElementById('new-keytype-desc').value;
-            
-            if (!name || !pattern) {
-                alert('Name and pattern required');
-                return;
-            }
-            
-            fetch('/admin/add_key_type', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type_name: name,
-                    pattern: pattern,
-                    description: desc
-                })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Key type added');
-                    location.reload();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            });
-        });
-        
-        // Toggle Product
-        document.querySelectorAll('.btn-toggle-product').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const productId = this.dataset.productId;
-                const isActive = this.dataset.active === 'True' ? false : true;
-                
-                fetch('/admin/toggle_product', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ product_id: productId, is_active: isActive })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) location.reload();
-                });
-            });
-        });
-    </script>
 </body>
 </html>
