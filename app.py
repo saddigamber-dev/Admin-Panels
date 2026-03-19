@@ -397,7 +397,7 @@ def calculate_discounted_credits(base_credit_per_day, days):
                 result = base_credit_per_day * days  # fallback
     
     print(f"🔥 DISCOUNT RESULT: {result}")
-    return round(result, 2)
+    return result
 
 # ============================================
 # API ENDPOINT TO GET DISCOUNTED PRICE
@@ -424,9 +424,9 @@ def api_discounted_price():
     
     return jsonify({
         'success': True,
-        'total_credits': total,
-        'original_total': base * days,
-        'savings': round((base * days) - total, 2)
+        'total_credits': float(total),
+        'original_total': float(base * days),
+        'savings': float(round((base * days) - total, 2))
     })
 
 # ============================================
@@ -775,7 +775,7 @@ def user_dashboard():
                          telegram_channel=TELEGRAM_CHANNEL)
 
 # ============================================
-# KEY GENERATION - WITH ULTRA DISCOUNT
+# KEY GENERATION - WITH ULTRA DISCOUNT & FIXED DECIMAL ERROR
 # ============================================
 
 @app.route('/generate_key', methods=['POST'])
@@ -803,36 +803,41 @@ def generate_key_route():
     total_credits = calculate_discounted_credits(base_credit, days)
     
     c.execute("SELECT credits FROM users WHERE username = %s", (session['username'],))
-    user_credits = c.fetchone()['credits']
+    result = c.fetchone()
+    user_credits = result['credits']
     
-    if user_credits < total_credits:
+    # FIX: Convert both to float for comparison
+    if float(user_credits) < float(total_credits):
         conn.close()
         return jsonify({'success': False, 'error': f'Need {total_credits} credits'})
     
     key = key_gen.generate_key(product['key_type'], product.get('custom_key_pattern'))
     expiry = datetime.now() + timedelta(days=days)
     
-    c.execute('UPDATE users SET credits = credits - %s WHERE username = %s',
-             (total_credits, session['username']))
+    # FIX: Convert to float for calculation
+    new_credits = float(user_credits) - float(total_credits)
+    c.execute('UPDATE users SET credits = %s WHERE username = %s',
+             (new_credits, session['username']))
     
     c.execute('''
         INSERT INTO licenses 
         (key, username, product_name, days, total_credits, expiry_date, status)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
-    ''', (key, session['username'], product['name'], days, total_credits,
+    ''', (key, session['username'], product['name'], days, float(total_credits),
           expiry, 'active'))
     
     conn.commit()
     conn.close()
     
-    session['credits'] = user_credits - total_credits
+    # Update session with float value
+    session['credits'] = new_credits
     
     return jsonify({
         'success': True, 
         'key': key,
-        'original_price': base_credit * days,
-        'final_price': total_credits,
-        'savings': round((base_credit * days) - total_credits, 2)
+        'original_price': float(base_credit * days),
+        'final_price': float(total_credits),
+        'savings': float(round((base_credit * days) - total_credits, 2))
     })
 
 # ============================================
@@ -1035,7 +1040,7 @@ def check_binance_payment(order_id):
                 UPDATE users 
                 SET credits = credits + %s, total_recharged = total_recharged + %s
                 WHERE username = %s
-            ''', (payment['credits_added'], payment['amount'], session['username']))
+            ''', (float(payment['credits_added']), float(payment['amount']), session['username']))
             
             conn.commit()
             conn.close()
@@ -1098,10 +1103,10 @@ def admin_dashboard():
     total_users = c.fetchone()['count']
     
     c.execute("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'approved'")
-    total_revenue = c.fetchone()['coalesce']
+    total_revenue = float(c.fetchone()['coalesce'])
     
     c.execute("SELECT COALESCE(SUM(credits_added), 0) FROM payments WHERE status = 'approved'")
-    total_credits_sold = c.fetchone()['coalesce']
+    total_credits_sold = float(c.fetchone()['coalesce'])
     
     c.execute("SELECT COUNT(*) FROM payments WHERE status = 'pending'")
     pending_payments = c.fetchone()['count']
@@ -1186,7 +1191,7 @@ def approve_payment():
             UPDATE users 
             SET credits = credits + %s, total_recharged = total_recharged + %s
             WHERE username = %s
-        ''', (payment['credits_added'], payment['amount'], payment['username']))
+        ''', (float(payment['credits_added']), float(payment['amount']), payment['username']))
         
         conn.commit()
         return jsonify({'success': True, 'message': 'Payment approved'})
