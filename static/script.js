@@ -7,11 +7,41 @@ document.addEventListener('DOMContentLoaded', function() {
     const productDetails = document.getElementById('product-details');
     const costPerDay = document.getElementById('cost-per-day');
     const totalCredits = document.getElementById('total-credits');
+    const originalPrice = document.getElementById('original-price');
+    const savings = document.getElementById('savings');
     const generateBtn = document.getElementById('generate-key');
     const generatedKeyDiv = document.getElementById('generated-key');
     const keyDisplay = document.querySelector('.key-display');
 
     let currentProduct = null;
+
+    // Function to update discounted price from server
+    function updateDiscountedPrice() {
+        if (!currentProduct) return;
+        
+        const days = daysSelect.value;
+        
+        fetch('/api/discounted_price', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                product_id: currentProduct.id,
+                days: days 
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                totalCredits.textContent = data.total_credits;
+                if (originalPrice) originalPrice.textContent = data.original_total;
+                if (savings) savings.textContent = data.savings;
+                
+                productDetails.style.display = 'block';
+                generateBtn.disabled = false;
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
 
     if (productSelect) {
         productSelect.addEventListener('change', function() {
@@ -19,7 +49,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (this.value) {
                 currentProduct = {
                     id: this.value,
-                    cost: selectedOption.dataset.cost
+                    cost: selectedOption.dataset.cost,
+                    price: selectedOption.dataset.price,
+                    type: selectedOption.dataset.type
                 };
                 
                 costPerDay.textContent = currentProduct.cost;
@@ -27,8 +59,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Show days selection
                 daysSelection.style.display = 'block';
                 
-                // Trigger initial calculation
-                updatePriceAndCredits();
+                // Trigger price update
+                updateDiscountedPrice();
             } else {
                 daysSelection.style.display = 'none';
                 productDetails.style.display = 'none';
@@ -40,19 +72,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Days selection handler
     if (daysSelect) {
-        daysSelect.addEventListener('change', updatePriceAndCredits);
-    }
-
-    function updatePriceAndCredits() {
-        if (!currentProduct) return;
-        
-        const days = parseInt(daysSelect.value);
-        const totalCreditsValue = currentProduct.cost * days;
-        
-        totalCredits.textContent = totalCreditsValue;
-        
-        productDetails.style.display = 'block';
-        generateBtn.disabled = false;
+        daysSelect.addEventListener('change', updateDiscountedPrice);
     }
 
     // Generate key handler
@@ -354,7 +374,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ============================================
-    // PAYMENT ACTIONS - FIXED VERSIONS
+    // PAYMENT ACTIONS
     // ============================================
 
     // Approve Payment
@@ -395,13 +415,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Reject Payment - FIXED
+    // Reject Payment
     document.querySelectorAll('.btn-reject-payment').forEach(btn => {
         btn.addEventListener('click', function() {
             const paymentId = this.dataset.paymentId;
             const reason = prompt('Enter rejection reason (optional):', 'Payment rejected by admin');
             
-            if (reason === null) return; // User cancelled
+            if (reason === null) return;
             
             const originalText = this.textContent;
             this.disabled = true;
@@ -437,7 +457,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Cancel Binance Order - NEW
+    // Cancel Binance Order
     document.querySelectorAll('.btn-cancel-binance').forEach(btn => {
         btn.addEventListener('click', function() {
             if (!confirm('⚠️ Are you sure you want to cancel this Binance order? This will delete the order permanently.')) return;
