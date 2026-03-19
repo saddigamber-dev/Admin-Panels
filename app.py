@@ -29,6 +29,12 @@ bcrypt = Bcrypt(app)
 logging.basicConfig(level=logging.DEBUG)
 
 # ============================================
+# DISCORD CONFIGURATION
+# ============================================
+DISCORD_BOT_TOKEN = 'MTQ4MTE4MDQ4ODczODUzNzU3Ng.GST2My.g3ri3K0YT_l9Pax5mNqj27dKOcw5R27a36R5rM'
+DISCORD_GUILD_ID = '1344323930923601992'  # TERI SERVER ID
+
+# ============================================
 # DATABASE CONNECTION
 # ============================================
 
@@ -67,12 +73,13 @@ def init_db():
         conn = get_db_connection()
         c = conn.cursor()
         
-        # Users table
+        # Users table - ADDED discord_id column
         c.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(100) UNIQUE NOT NULL,
                 password VARCHAR(255) NOT NULL,
+                discord_id VARCHAR(100) UNIQUE,
                 role VARCHAR(50) DEFAULT 'user',
                 credits DECIMAL(10,2) DEFAULT 0,
                 total_recharged DECIMAL(10,2) DEFAULT 0,
@@ -110,7 +117,7 @@ def init_db():
             )
         ''')
         
-        # Payments table - WITH ALL COLUMNS
+        # Payments table
         c.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id SERIAL PRIMARY KEY,
@@ -220,14 +227,24 @@ def init_db():
 init_db()
 
 # ============================================
-# ADD MISSING COLUMNS IF NEEDED
+# ADD MISSING COLUMNS
 # ============================================
 
 def add_missing_columns():
-    """Add missing columns to payments table"""
+    """Add missing columns to tables"""
     try:
         conn = get_db_connection()
         c = conn.cursor()
+        
+        # Check and add discord_id column to users
+        c.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='users' AND column_name='discord_id'
+        """)
+        if not c.fetchone():
+            c.execute("ALTER TABLE users ADD COLUMN discord_id VARCHAR(100) UNIQUE")
+            logging.info("✅ Added discord_id column to users table")
         
         # Check and add rejection_reason column
         c.execute("""
@@ -286,7 +303,6 @@ def add_missing_columns():
         logging.error(f"❌ Error adding columns: {e}")
         return False
 
-# Call this after init_db
 add_missing_columns()
 
 # ============================================
@@ -301,6 +317,58 @@ WHATSAPP_LINK = os.getenv('WHATSAPP_LINK', 'https://wa.me/message/IGTHSKO23KP4H1
 TELEGRAM_CHANNEL = os.getenv('TELEGRAM_CHANNEL', 'https://t.me/growmarthq')
 USD_TO_INR = 98  # 1$ = 98 INR
 BINANCE_ADDRESS = '1143351874'  # TERA BINANCE ADDRESS
+
+# ============================================
+# DISCORD VERIFICATION FUNCTION
+# ============================================
+
+def check_discord_membership(discord_user_id):
+    """Check if user is in Discord server"""
+    try:
+        url = f"https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{discord_user_id}"
+        headers = {
+            "Authorization": f"Bot {DISCORD_BOT_TOKEN}"
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 200:
+            logging.info(f"✅ Discord user {discord_user_id} is a member")
+            return True, "Member verified"
+        elif response.status_code == 404:
+            logging.warning(f"❌ Discord user {discord_user_id} not in server")
+            return False, "You are not a member of our Discord server. Please join first: https://discord.gg/ATK3JcG7rB"
+        else:
+            logging.error(f"Discord API error: {response.status_code}")
+            return False, "Discord verification failed. Please try again later."
+    except Exception as e:
+        logging.error(f"Discord check error: {e}")
+        return False, "Error verifying Discord membership"
+
+# ============================================
+# DYNAMIC PRICING FUNCTION
+# ============================================
+
+def calculate_discounted_credits(base_credit_per_day, days):
+    """Calculate total credits with bulk discount"""
+    # Base price per day
+    if days == 1:
+        return base_credit_per_day * 1
+    elif days == 3:
+        return base_credit_per_day * 1.8  # 20% discount (3*0.6 = 1.8)
+    elif days == 7:
+        return base_credit_per_day * 3.5  # 50% discount (7*0.5 = 3.5)
+    elif days == 15:
+        return base_credit_per_day * 6.0  # 60% discount (15*0.4 = 6.0)
+    elif days == 30:
+        return base_credit_per_day * 9.0  # 70% discount (30*0.3 = 9.0)
+    elif days == 60:
+        return base_credit_per_day * 15.0 # 75% discount (60*0.25 = 15.0)
+    elif days == 90:
+        return base_credit_per_day * 18.0 # 80% discount (90*0.2 = 18.0)
+    else:
+        # For custom days, give 50% discount
+        return base_credit_per_day * (days * 0.5)
 
 # ============================================
 # KEY GENERATOR CLASS
@@ -524,6 +592,7 @@ def login():
             session['username'] = user['username']
             session['role'] = user['role']
             session['credits'] = float(user['credits']) if user['credits'] else 0
+            session['user_id'] = user['id']
             
             if user['role'] == 'admin':
                 return redirect(url_for('admin_dashboard'))
@@ -535,29 +604,47 @@ def login():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    """Register with Discord verification"""
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         confirm = request.form.get('confirm_password', '')
+        discord_id = request.form.get('discord_id', '').strip()
         
+        # Basic validation
+        if not username or not password or not discord_id:
+            return render_template('register.html', error='All fields are required')
         if password != confirm:
             return render_template('register.html', error='Passwords do not match')
+        if len(password) < 6:
+            return render_template('register.html', error='Password must be at least 6 characters')
         
-        hashed = bcrypt.generate_password_hash(password).decode('utf-8')
+        # 🔥 DISCORD VERIFICATION
+        is_member, message = check_discord_membership(discord_id)
+        if not is_member:
+            return render_template('register.html', error=message)
         
+        # Check if Discord ID already registered
         conn = get_db_connection()
         c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE discord_id = %s", (discord_id,))
+        if c.fetchone():
+            conn.close()
+            return render_template('register.html', error='This Discord account is already registered')
+        
+        # Create user
+        hashed = bcrypt.generate_password_hash(password).decode('utf-8')
         try:
             c.execute('''
-                INSERT INTO users (username, password, role, credits)
-                VALUES (%s, %s, %s, %s)
-            ''', (username, hashed, 'user', 0))
+                INSERT INTO users (username, password, discord_id, role, credits)
+                VALUES (%s, %s, %s, %s, %s)
+            ''', (username, hashed, discord_id, 'user', 0))
             conn.commit()
             conn.close()
             return redirect(url_for('login'))
-        except:
+        except Exception as e:
             conn.close()
-            return render_template('register.html', error='Username exists')
+            return render_template('register.html', error='Username already exists')
     
     return render_template('register.html')
 
@@ -612,7 +699,7 @@ def user_dashboard():
                          telegram_channel=TELEGRAM_CHANNEL)
 
 # ============================================
-# KEY GENERATION
+# KEY GENERATION WITH DISCOUNT
 # ============================================
 
 @app.route('/generate_key', methods=['POST'])
@@ -634,14 +721,17 @@ def generate_key_route():
         conn.close()
         return jsonify({'success': False, 'error': 'Product not found'})
     
-    total_credits = float(product['credit_cost_per_day']) * days
+    base_credit = float(product['credit_cost_per_day'])
+    
+    # 🎯 USE DISCOUNTED PRICING
+    total_credits = calculate_discounted_credits(base_credit, days)
     
     c.execute("SELECT credits FROM users WHERE username = %s", (session['username'],))
     user_credits = c.fetchone()['credits']
     
     if user_credits < total_credits:
         conn.close()
-        return jsonify({'success': False, 'error': f'Need {total_credits} credits'})
+        return jsonify({'success': False, 'error': f'Need {total_credits} credits (Discounted price for {days} days)'})
     
     key = key_gen.generate_key(product['key_type'], product.get('custom_key_pattern'))
     expiry = datetime.now() + timedelta(days=days)
@@ -660,6 +750,8 @@ def generate_key_route():
     
     conn.commit()
     conn.close()
+    
+    session['credits'] = user_credits - total_credits
     
     return jsonify({'success': True, 'key': key})
 
