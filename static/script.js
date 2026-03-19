@@ -6,9 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const daysSelect = document.getElementById('days-select');
     const productDetails = document.getElementById('product-details');
     const costPerDay = document.getElementById('cost-per-day');
-    const pricePerDay = document.getElementById('price-per-day');
     const totalCredits = document.getElementById('total-credits');
-    const totalPrice = document.getElementById('total-price');
     const generateBtn = document.getElementById('generate-key');
     const generatedKeyDiv = document.getElementById('generated-key');
     const keyDisplay = document.querySelector('.key-display');
@@ -21,13 +19,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (this.value) {
                 currentProduct = {
                     id: this.value,
-                    cost: selectedOption.dataset.cost,
-                    price: selectedOption.dataset.price,
-                    type: selectedOption.dataset.type
+                    cost: selectedOption.dataset.cost
                 };
                 
                 costPerDay.textContent = currentProduct.cost;
-                pricePerDay.textContent = currentProduct.price;
                 
                 // Show days selection
                 daysSelection.style.display = 'block';
@@ -53,10 +48,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const days = parseInt(daysSelect.value);
         const totalCreditsValue = currentProduct.cost * days;
-        const totalPriceValue = currentProduct.price * days;
         
         totalCredits.textContent = totalCreditsValue;
-        totalPrice.textContent = totalPriceValue;
         
         productDetails.style.display = 'block';
         generateBtn.disabled = false;
@@ -212,6 +205,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const credit_cost_per_day = document.getElementById('new-product-credits').value;
             const price_per_day = document.getElementById('new-product-price').value;
             const key_type = document.getElementById('new-product-keytype').value;
+            const custom_pattern = document.getElementById('new-product-custom-pattern')?.value || '';
 
             if (!name || !credit_cost_per_day || !price_per_day) {
                 alert('Please fill all fields');
@@ -227,7 +221,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     name: name,
                     credit_cost_per_day: credit_cost_per_day,
                     price_per_day: price_per_day,
-                    key_type: key_type
+                    key_type: key_type,
+                    custom_key_pattern: custom_pattern
                 })
             })
             .then(response => response.json())
@@ -253,6 +248,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const editProductCredits = document.getElementById('edit-product-credits');
     const editProductPrice = document.getElementById('edit-product-price');
     const editProductKeyType = document.getElementById('edit-product-keytype');
+    const editProductCustomPattern = document.getElementById('edit-product-custom-pattern');
     const updateProductBtn = document.getElementById('update-product');
     const closeModalBtn = document.getElementById('close-modal');
 
@@ -274,6 +270,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             
+            // Check if custom pattern exists
+            const customPatternCell = cells[4]?.textContent.trim();
+            if (editProductCustomPattern) {
+                editProductCustomPattern.value = customPatternCell || '';
+            }
+            
             editProductModal.style.display = 'flex';
         });
     });
@@ -285,6 +287,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const credit_cost_per_day = editProductCredits.value;
             const price_per_day = editProductPrice.value;
             const key_type = editProductKeyType.value;
+            const custom_pattern = editProductCustomPattern?.value || '';
 
             fetch('/admin/edit_product', {
                 method: 'POST',
@@ -296,7 +299,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     name: name,
                     credit_cost_per_day: credit_cost_per_day,
                     price_per_day: price_per_day,
-                    key_type: key_type
+                    key_type: key_type,
+                    custom_key_pattern: custom_pattern
                 })
             })
             .then(response => response.json())
