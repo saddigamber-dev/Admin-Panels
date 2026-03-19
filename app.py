@@ -17,7 +17,6 @@ from psycopg2.extras import RealDictCursor
 import socket
 import requests
 import re
-import threading
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
@@ -111,7 +110,7 @@ def init_db():
             )
         ''')
         
-        # Payments table - ADDED expiry_time
+        # Payments table
         c.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id SERIAL PRIMARY KEY,
@@ -230,7 +229,6 @@ UPI_ID = os.getenv('UPI_ID', 'prabhu84@ptaxis')
 UPI_NAME = os.getenv('UPI_NAME', 'Digamber Raj')
 WHATSAPP_LINK = os.getenv('WHATSAPP_LINK', 'https://wa.me/message/IGTHSKO23KP4H1')
 TELEGRAM_CHANNEL = os.getenv('TELEGRAM_CHANNEL', 'https://t.me/growmarthq')
-BINANCE_API_URL = os.getenv('BINANCE_API_URL', 'https://binance-verifier.onrender.com')
 USD_TO_INR = 98  # 1$ = 98 INR
 BINANCE_ADDRESS = '1143351874'  # TERA BINANCE ADDRESS
 
@@ -330,15 +328,16 @@ class KeyGenerator:
 key_gen = KeyGenerator()
 
 # ============================================
-# BINANCE API CLASS - FIXED WITH REAL ADDRESS
+# BINANCE API CLASS - TERI API KE HISAB SE
 # ============================================
 
 class BinanceAPI:
     def __init__(self):
-        self.base_url = BINANCE_API_URL
+        self.base_url = 'https://binance-verifier.onrender.com'
         self.timeout = 30
     
     def _request(self, endpoint, method='GET', data=None):
+        """Make API request to Binance verifier"""
         try:
             url = self.base_url + endpoint
             if method == 'GET':
@@ -349,29 +348,69 @@ class BinanceAPI:
             if response.status_code == 200:
                 return response.json()
             else:
+                logging.error(f"Binance API error: {response.status_code}")
                 return {'success': False, 'error': f'HTTP {response.status_code}'}
         except Exception as e:
+            logging.error(f"Binance API error: {e}")
             return {'success': False, 'error': str(e)}
     
-    def create_order(self, amount_usd, email=None):
-        order_id = f"BNB{int(time.time())}{random.randint(100,999)}"
+    def create_order(self, amount, email=None):
+        """Create payment order"""
+        order_id = f"ORD{int(time.time())}{random.randint(100,999)}"
         return self._request('/api/create-order', 'POST', {
-            'orderId': order_id,
-            'amount': float(amount_usd),
-            'customerEmail': email
+            'amount': float(amount),
+            'customerEmail': email or f"{session['username']}@user.com"
         })
     
     def check_order(self, order_id):
+        """Check order status"""
         return self._request(f'/api/check/{order_id}')
     
-    def get_address(self, order_id):
-        """Get crypto address for order - FIXED: Returns REAL Binance ID"""
-        # TERA REAL BINANCE ADDRESS - 1143351874
-        return {'address': BINANCE_ADDRESS}
+    def verify_payment(self, order_id, amount):
+        """Verify payment"""
+        return self._request('/api/verify', 'POST', {
+            'orderId': order_id,
+            'amount': float(amount)
+        })
+    
+    def get_balance(self):
+        """Get USDT balance"""
+        return self._request('/api/balance')
+    
+    def get_payments(self):
+        """Get recent payments"""
+        return self._request('/api/payments')
+    
+    def get_transactions(self):
+        """Get all transactions"""
+        return self._request('/api/transactions')
+    
+    def get_qr(self, order_id):
+        """Get QR code for order"""
+        return self._request(f'/api/qr/{order_id}')
+    
+    def check_expired(self, order_id):
+        """Check if order expired"""
+        return self._request(f'/api/expired/{order_id}')
     
     def cancel_order(self, order_id):
-        """Cancel order on Binance"""
+        """Cancel order"""
         return self._request(f'/api/cancel/{order_id}', 'POST')
+    
+    def get_address(self, order_id):
+        """Get deposit address"""
+        result = self._request(f'/api/address/{order_id}')
+        if result and result.get('address'):
+            return result
+        return {'address': BINANCE_ADDRESS}
+    
+    def notify(self, order_id, email):
+        """Send notification"""
+        return self._request(f'/api/notify/{order_id}', 'POST', {'email': email})
+    
+    def webhook(self, data):
+        """Send webhook"""
+        return self._request('/api/webhook', 'POST', data)
 
 binance_api = BinanceAPI()
 
@@ -693,6 +732,7 @@ def binance_payment():
         # Convert to USD (98 INR = 1$)
         amount_usd = round(amount_inr / USD_TO_INR, 2)
         
+        # Create Binance order using your API
         result = binance_api.create_order(amount_usd, f"{session['username']}@user.com")
         
         if result and result.get('success'):
@@ -713,11 +753,15 @@ def binance_payment():
             conn.commit()
             conn.close()
             
+            # Get QR code
+            qr_data = binance_api.get_qr(order_id)
+            
             return render_template('binance_payment.html',
                                  order_id=order_id,
                                  amount_inr=amount_inr,
                                  amount_usd=amount_usd,
                                  credits=credits,
+                                 qr_code=qr_data.get('qr') if qr_data else None,
                                  binance_address=BINANCE_ADDRESS,
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
@@ -726,7 +770,7 @@ def binance_payment():
                                  telegram_channel=TELEGRAM_CHANNEL)
         else:
             return render_template('binance_payment.html',
-                                 error='Binance service unavailable',
+                                 error='Binance service unavailable. Please try UPI.',
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  usd_to_inr=USD_TO_INR,
@@ -888,7 +932,7 @@ def admin_dashboard():
                          telegram_channel=TELEGRAM_CHANNEL)
 
 # ============================================
-# ADMIN - PAYMENT ACTIONS (APPROVE/REJECT WITH REASON)
+# ADMIN - PAYMENT ACTIONS
 # ============================================
 
 @app.route('/admin/approve_payment', methods=['POST'])
@@ -909,14 +953,12 @@ def approve_payment():
         conn.close()
         return jsonify({'success': False, 'error': 'Payment not found'})
     
-    # Update payment
     c.execute('''
         UPDATE payments 
         SET status = 'approved', approved_date = %s, approved_by = %s, rejection_reason = NULL
         WHERE id = %s
     ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), session['username'], payment_id))
     
-    # Add credits to user
     c.execute('''
         UPDATE users 
         SET credits = credits + %s, total_recharged = total_recharged + %s
@@ -930,7 +972,6 @@ def approve_payment():
 
 @app.route('/admin/reject_payment', methods=['POST'])
 def reject_payment():
-    """Reject payment with reason - user ko message jayega"""
     if 'username' not in session or session.get('role') != 'admin':
         return jsonify({'success': False, 'error': 'Unauthorized'})
     
@@ -958,7 +999,6 @@ def reject_payment():
 
 @app.route('/admin/delete_binance_payment', methods=['POST'])
 def delete_binance_payment():
-    """Admin delete any Binance payment"""
     if 'username' not in session or session.get('role') != 'admin':
         return jsonify({'success': False, 'error': 'Unauthorized'})
     
@@ -975,17 +1015,14 @@ def delete_binance_payment():
 
 @app.route('/admin/force_expire_binance', methods=['POST'])
 def force_expire_binance():
-    """Admin force expire a Binance order"""
     if 'username' not in session or session.get('role') != 'admin':
         return jsonify({'success': False, 'error': 'Unauthorized'})
     
     data = request.get_json()
     order_id = data.get('order_id')
     
-    # Cancel on Binance API
     binance_api.cancel_order(order_id)
     
-    # Delete from database
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM payments WHERE order_id = %s", (order_id,))
@@ -995,20 +1032,24 @@ def force_expire_binance():
     return jsonify({'success': True, 'message': 'Order expired and deleted'})
 
 # ============================================
-# ADMIN - TRACK SPECIFIC BINANCE ORDER
+# ADMIN - TRACK BINANCE ORDERS
 # ============================================
 
-@app.route('/admin/track_binance/<order_id>')
-def track_binance(order_id):
+@app.route('/admin/binance_stats')
+def binance_stats():
     if 'username' not in session or session.get('role') != 'admin':
         return jsonify({'success': False, 'error': 'Unauthorized'})
     
-    result = binance_api.check_order(order_id)
+    balance = binance_api.get_balance()
+    payments = binance_api.get_payments()
+    transactions = binance_api.get_transactions()
+    stats = binance_api.get_daily_stats()
     
     return jsonify({
-        'order_status': result,
-        'binance_address': BINANCE_ADDRESS,
-        'note': 'Binance ID: 1143351874'
+        'balance': balance,
+        'payments': payments,
+        'transactions': transactions,
+        'stats': stats
     })
 
 # ============================================
