@@ -323,33 +323,113 @@ DISCORD_GUILD_ID = os.getenv('DISCORD_GUILD_ID', '1344323930923601992')
 DISCORD_INVITE_LINK = os.getenv('DISCORD_INVITE_LINK', 'https://discord.gg/ATK3JcG7rB')
 
 # ============================================
-# DISCORD VERIFICATION
+# DISCORD VERIFICATION - FIXED WITH ALL ERROR HANDLING
 # ============================================
 
 def check_discord_membership(discord_user_id):
+    """
+    Check if user is a member of the Discord server using Bot API
+    """
+    # Log Discord configuration for debugging
+    logging.info(f"🔍 Discord Bot Token configured: {'Yes' if DISCORD_BOT_TOKEN else 'No'}")
+    logging.info(f"🔍 Discord Guild ID: {DISCORD_GUILD_ID}")
+    
     if not DISCORD_BOT_TOKEN or not DISCORD_GUILD_ID:
         logging.error("❌ Discord Bot Token or Guild ID not configured!")
+        # For development only - bypass Discord check
         if app.debug:
+            logging.warning("⚠️ Development mode: Bypassing Discord check")
             return True
         return False
     
+    # Clean the Discord ID (remove any whitespace)
+    discord_user_id = str(discord_user_id).strip()
+    
+    # Validate Discord ID format (should be numeric)
+    if not discord_user_id.isdigit():
+        logging.error(f"❌ Invalid Discord ID format: {discord_user_id}")
+        return False
+    
+    # Prepare API request
     url = f"https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{discord_user_id}"
-    headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
+    headers = {
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
     
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        logging.info(f"🔍 Checking Discord membership for user: {discord_user_id}")
+        
+        # Make request with timeout
+        response = requests.get(
+            url, 
+            headers=headers, 
+            timeout=10,
+            allow_redirects=False
+        )
+        
+        # Log response status for debugging
+        logging.info(f"🔍 Discord API Response Status: {response.status_code}")
+        
+        # Handle different response codes
         if response.status_code == 200:
+            # User is in the server
+            user_data = response.json()
+            logging.info(f"✅ Discord user {discord_user_id} is a member (Nick: {user_data.get('nick', 'N/A')})")
             return True
+            
         elif response.status_code == 404:
+            # User not in server
+            logging.warning(f"❌ Discord user {discord_user_id} is NOT a member of the server")
             return False
+            
+        elif response.status_code == 401:
+            # Invalid bot token
+            logging.error(f"❌ Discord API 401 Unauthorized - Bot token is invalid or expired!")
+            logging.error("   Please regenerate your bot token in Discord Developer Portal")
+            return False
+            
+        elif response.status_code == 403:
+            # Missing permissions/intents
+            logging.error(f"❌ Discord API 403 Forbidden - Missing permissions or intents!")
+            logging.error("   Please enable SERVER MEMBERS INTENT in Discord Developer Portal")
+            return False
+            
+        elif response.status_code == 429:
+            # Rate limited
+            retry_after = response.headers.get('Retry-After', 'unknown')
+            logging.error(f"❌ Discord API Rate Limited - Retry after {retry_after} seconds")
+            return False
+            
         else:
+            # Other errors
+            logging.error(f"❌ Discord API error: {response.status_code}")
+            try:
+                error_data = response.json()
+                logging.error(f"   Error details: {error_data}")
+            except:
+                logging.error(f"   Response: {response.text[:200]}")
             return False
+            
+    except requests.exceptions.ConnectionError as e:
+        logging.error(f"❌ Discord API Connection Error - Cannot reach Discord servers")
+        logging.error(f"   Details: {str(e)}")
+        return False
+        
+    except requests.exceptions.Timeout:
+        logging.error(f"❌ Discord API Timeout - Request took too long")
+        return False
+        
+    except requests.exceptions.RequestException as e:
+        logging.error(f"❌ Discord API Request Error: {str(e)}")
+        return False
+        
     except Exception as e:
-        logging.error(f"❌ Discord API error: {e}")
+        logging.error(f"❌ Unexpected error checking Discord membership: {str(e)}")
         return False
 
 # ============================================
-# ULTRA DISCOUNT ENGINE - FINAL WORKING VERSION
+# ULTRA DISCOUNT ENGINE
 # ============================================
 
 def calculate_discounted_credits(base_credit_per_day, days):
@@ -688,11 +768,23 @@ def register():
                                  discord_invite=DISCORD_INVITE_LINK)
         
         # DISCORD VERIFICATION
-        if not check_discord_membership(discord_id):
+        logging.info(f"🔍 Attempting Discord verification for user: {discord_id}")
+        is_member = check_discord_membership(discord_id)
+        
+        if not is_member:
+            # Check if it's a configuration issue
+            if not DISCORD_BOT_TOKEN:
+                return render_template('register.html', 
+                                     error='Discord verification is temporarily unavailable. Please contact admin.',
+                                     discord_invite=DISCORD_INVITE_LINK)
+            
             return render_template('register.html', 
                                  error=f'❌ You must join our Discord server first! Join here: {DISCORD_INVITE_LINK}',
                                  discord_invite=DISCORD_INVITE_LINK)
         
+        logging.info(f"✅ Discord verification passed for user: {discord_id}")
+        
+        # Discord verified, proceed with registration
         hashed = bcrypt.generate_password_hash(password).decode('utf-8')
         
         conn = get_db_connection()
@@ -704,9 +796,11 @@ def register():
             ''', (username, hashed, 'user', 0, discord_id, datetime.now()))
             conn.commit()
             conn.close()
+            logging.info(f"✅ User registered successfully: {username}")
             return redirect(url_for('login'))
         except Exception as e:
             conn.close()
+            logging.error(f"❌ Registration error: {e}")
             if 'duplicate key' in str(e):
                 return render_template('register.html', 
                                      error='Username or Discord ID already exists',
