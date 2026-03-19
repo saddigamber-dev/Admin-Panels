@@ -25,7 +25,7 @@
                 
                 <!-- Payment Method Selection -->
                 <div style="display: flex; gap: 1rem; margin: 2rem 0; justify-content: center; flex-wrap: wrap;">
-                    <a href="{{ url_for('upi_payment') }}" class="btn-primary" style="width: auto; padding: 1rem 3rem;">
+                    <a href="{{ url_for('upi_payment') }}" class="btn-primary" style="width: auto; padding: 1rem 3rem; background: var(--gradient-green);">
                         <i class="fas fa-mobile-alt"></i> UPI Payment
                     </a>
                     <a href="{{ url_for('binance_payment') }}" class="btn-primary" style="width: auto; padding: 1rem 3rem; background: linear-gradient(145deg, #f0b90b, #d4a00a);">
@@ -39,7 +39,7 @@
                     <h3>Choose Your Payment Method</h3>
                     <p style="margin-top: 1rem;">
                         <strong>UPI:</strong> Manual approval (UTR required)<br>
-                        <strong>Binance:</strong> Auto credits on payment
+                        <strong>Binance:</strong> Auto credits on payment (USD rate: 1$ = 98₹)
                     </p>
                     <p style="margin-top: 1rem; color: var(--accent-yellow);">
                         Minimum: ₹{{ min_recharge }}
