@@ -270,10 +270,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             
-            // Check if custom pattern exists
-            const customPatternCell = cells[4]?.textContent.trim();
             if (editProductCustomPattern) {
-                editProductCustomPattern.value = customPatternCell || '';
+                editProductCustomPattern.value = cells[4]?.textContent.trim() || '';
             }
             
             editProductModal.style.display = 'flex';
@@ -355,12 +353,20 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // ============================================
+    // PAYMENT ACTIONS - FIXED VERSIONS
+    // ============================================
+
     // Approve Payment
     document.querySelectorAll('.btn-approve-payment').forEach(btn => {
         btn.addEventListener('click', function() {
-            if (!confirm('Approve this payment?')) return;
+            if (!confirm('Approve this payment? Credits will be added to user.')) return;
             
             const paymentId = this.dataset.paymentId;
+            const originalText = this.textContent;
+            
+            this.disabled = true;
+            this.textContent = 'Approving...';
             
             fetch('/admin/approve_payment', {
                 method: 'POST',
@@ -372,45 +378,99 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Payment approved successfully! Credits added to user.');
+                    alert('✅ Payment approved! Credits added to user.');
                     location.reload();
                 } else {
-                    alert('Failed to approve payment');
+                    alert('❌ Error: ' + (data.error || 'Failed to approve payment'));
+                    this.disabled = false;
+                    this.textContent = originalText;
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred');
+                alert('❌ An error occurred');
+                this.disabled = false;
+                this.textContent = originalText;
             });
         });
     });
 
-    // Reject Payment
+    // Reject Payment - FIXED
     document.querySelectorAll('.btn-reject-payment').forEach(btn => {
         btn.addEventListener('click', function() {
-            if (!confirm('Reject this payment?')) return;
-            
             const paymentId = this.dataset.paymentId;
+            const reason = prompt('Enter rejection reason (optional):', 'Payment rejected by admin');
+            
+            if (reason === null) return; // User cancelled
+            
+            const originalText = this.textContent;
+            this.disabled = true;
+            this.textContent = 'Rejecting...';
             
             fetch('/admin/reject_payment', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ payment_id: paymentId })
+                body: JSON.stringify({ 
+                    payment_id: paymentId,
+                    reason: reason || 'Payment rejected by admin'
+                })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Payment rejected');
+                    alert('✅ Payment rejected successfully');
                     location.reload();
                 } else {
-                    alert('Failed to reject payment');
+                    alert('❌ Error: ' + (data.error || 'Failed to reject payment'));
+                    this.disabled = false;
+                    this.textContent = originalText;
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred');
+                alert('❌ An error occurred');
+                this.disabled = false;
+                this.textContent = originalText;
+            });
+        });
+    });
+
+    // Cancel Binance Order - NEW
+    document.querySelectorAll('.btn-cancel-binance').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('⚠️ Are you sure you want to cancel this Binance order? This will delete the order permanently.')) return;
+            
+            const orderId = this.dataset.orderId;
+            const originalText = this.textContent;
+            
+            this.disabled = true;
+            this.textContent = 'Cancelling...';
+            
+            fetch('/admin/cancel_binance_order', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ order_id: orderId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Order cancelled successfully');
+                    location.reload();
+                } else {
+                    alert('❌ Error: ' + (data.error || 'Failed to cancel order'));
+                    this.disabled = false;
+                    this.textContent = originalText;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('❌ An error occurred');
+                this.disabled = false;
+                this.textContent = originalText;
             });
         });
     });
@@ -530,6 +590,71 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error:', error);
                 alert('An error occurred');
             });
+        });
+    });
+
+    // Toggle Product
+    document.querySelectorAll('.btn-toggle-product').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const productId = this.dataset.productId;
+            const isActive = this.dataset.active === 'True' ? false : true;
+            
+            fetch('/admin/toggle_product', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ product_id: productId, is_active: isActive })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) location.reload();
+            });
+        });
+    });
+
+    // Show/hide custom pattern field
+    document.getElementById('new-product-keytype')?.addEventListener('change', function() {
+        const customGroup = document.getElementById('custom-pattern-group');
+        if (customGroup) {
+            customGroup.style.display = this.value === 'custom' ? 'block' : 'none';
+        }
+    });
+
+    // Add Key Type
+    document.getElementById('add-keytype-btn')?.addEventListener('click', function() {
+        document.getElementById('add-keytype-form').style.display = 'block';
+    });
+    
+    document.getElementById('cancel-keytype')?.addEventListener('click', function() {
+        document.getElementById('add-keytype-form').style.display = 'none';
+    });
+    
+    document.getElementById('save-keytype')?.addEventListener('click', function() {
+        const name = document.getElementById('new-keytype-name').value;
+        const pattern = document.getElementById('new-keytype-pattern').value;
+        const desc = document.getElementById('new-keytype-desc').value;
+        
+        if (!name || !pattern) {
+            alert('Name and pattern required');
+            return;
+        }
+        
+        fetch('/admin/add_key_type', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type_name: name,
+                pattern: pattern,
+                description: desc
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('Key type added');
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
         });
     });
 
