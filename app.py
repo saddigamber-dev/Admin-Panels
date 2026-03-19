@@ -17,6 +17,7 @@ from psycopg2.extras import RealDictCursor
 import socket
 import requests
 import re
+import threading
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
@@ -110,7 +111,7 @@ def init_db():
             )
         ''')
         
-        # Payments table - ADDED rejection_reason
+        # Payments table - ADDED expiry_time
         c.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id SERIAL PRIMARY KEY,
@@ -123,6 +124,7 @@ def init_db():
                 status VARCHAR(50) DEFAULT 'pending',
                 rejection_reason TEXT,
                 date TIMESTAMP NOT NULL,
+                expiry_time TIMESTAMP,
                 approved_date TIMESTAMP,
                 approved_by VARCHAR(100),
                 binance_data TEXT
@@ -230,6 +232,7 @@ WHATSAPP_LINK = os.getenv('WHATSAPP_LINK', 'https://wa.me/message/IGTHSKO23KP4H1
 TELEGRAM_CHANNEL = os.getenv('TELEGRAM_CHANNEL', 'https://t.me/growmarthq')
 BINANCE_API_URL = os.getenv('BINANCE_API_URL', 'https://binance-verifier.onrender.com')
 USD_TO_INR = 98  # 1$ = 98 INR
+BINANCE_ADDRESS = '1143351874'  # TERA BINANCE ADDRESS
 
 # ============================================
 # KEY GENERATOR CLASS
@@ -327,7 +330,7 @@ class KeyGenerator:
 key_gen = KeyGenerator()
 
 # ============================================
-# BINANCE API CLASS
+# BINANCE API CLASS - FIXED WITH REAL ADDRESS
 # ============================================
 
 class BinanceAPI:
@@ -362,14 +365,13 @@ class BinanceAPI:
         return self._request(f'/api/check/{order_id}')
     
     def get_address(self, order_id):
-        """Get crypto address for order"""
-        result = self._request(f'/api/address/{order_id}')
-        if result and result.get('address'):
-            return result
-        # For specific order ID 1143351874
-        if order_id == '1143351874':
-            return {'address': '0x742d35Cc6634C0532925a3b844Bc5e7e7a9d1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9'}
-        return {'address': None}
+        """Get crypto address for order - FIXED: Returns REAL Binance ID"""
+        # TERA REAL BINANCE ADDRESS - 1143351874
+        return {'address': BINANCE_ADDRESS}
+    
+    def cancel_order(self, order_id):
+        """Cancel order on Binance"""
+        return self._request(f'/api/cancel/{order_id}', 'POST')
 
 binance_api = BinanceAPI()
 
@@ -474,7 +476,7 @@ def logout():
     return redirect(url_for('login'))
 
 # ============================================
-# USER DASHBOARD - FIXED WITH format_datetime
+# USER DASHBOARD
 # ============================================
 
 @app.route('/dashboard')
@@ -585,6 +587,7 @@ def payment_page():
                          credit_rate=CREDIT_RATE,
                          upi_id=UPI_ID,
                          usd_to_inr=USD_TO_INR,
+                         binance_address=BINANCE_ADDRESS,
                          whatsapp_link=WHATSAPP_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
@@ -605,6 +608,7 @@ def upi_payment():
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID,
                                  usd_to_inr=USD_TO_INR,
+                                 binance_address=BINANCE_ADDRESS,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         
@@ -615,6 +619,7 @@ def upi_payment():
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID,
                                  usd_to_inr=USD_TO_INR,
+                                 binance_address=BINANCE_ADDRESS,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         
@@ -638,6 +643,7 @@ def upi_payment():
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID,
                                  usd_to_inr=USD_TO_INR,
+                                 binance_address=BINANCE_ADDRESS,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         except:
@@ -648,6 +654,7 @@ def upi_payment():
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID,
                                  usd_to_inr=USD_TO_INR,
+                                 binance_address=BINANCE_ADDRESS,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
     
@@ -660,6 +667,7 @@ def upi_payment():
                          credit_rate=CREDIT_RATE,
                          upi_id=UPI_ID,
                          usd_to_inr=USD_TO_INR,
+                         binance_address=BINANCE_ADDRESS,
                          whatsapp_link=WHATSAPP_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
@@ -678,6 +686,7 @@ def binance_payment():
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  usd_to_inr=USD_TO_INR,
+                                 binance_address=BINANCE_ADDRESS,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         
@@ -689,28 +698,27 @@ def binance_payment():
         if result and result.get('success'):
             order_id = result.get('orderId')
             credits = amount_inr * CREDIT_RATE
+            expiry_time = datetime.now() + timedelta(minutes=10)
             
             conn = get_db_connection()
             c = conn.cursor()
             c.execute('''
                 INSERT INTO payments 
-                (username, payment_method, order_id, amount, credits_added, status, date, binance_data)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (username, payment_method, order_id, amount, credits_added, status, date, expiry_time, binance_data)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (session['username'], 'binance', order_id, amount_inr, credits, 'pending',
                   datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                  expiry_time.strftime('%Y-%m-%d %H:%M:%S'),
                   json.dumps(result)))
             conn.commit()
             conn.close()
-            
-            # Get address
-            address_data = binance_api.get_address(order_id)
             
             return render_template('binance_payment.html',
                                  order_id=order_id,
                                  amount_inr=amount_inr,
                                  amount_usd=amount_usd,
                                  credits=credits,
-                                 address=address_data.get('address'),
+                                 binance_address=BINANCE_ADDRESS,
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  usd_to_inr=USD_TO_INR,
@@ -722,6 +730,7 @@ def binance_payment():
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  usd_to_inr=USD_TO_INR,
+                                 binance_address=BINANCE_ADDRESS,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
     
@@ -729,6 +738,7 @@ def binance_payment():
                          min_recharge=MINIMUM_RECHARGE,
                          credit_rate=CREDIT_RATE,
                          usd_to_inr=USD_TO_INR,
+                         binance_address=BINANCE_ADDRESS,
                          whatsapp_link=WHATSAPP_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
@@ -773,6 +783,16 @@ def check_binance_payment(order_id):
         'success': True,
         'status': result.get('status', 'pending') if result else 'pending'
     })
+
+@app.route('/payment/binance/cleanup/<order_id>', methods=['POST'])
+def cleanup_binance_order(order_id):
+    """Auto-delete expired Binance orders after 10 minutes"""
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM payments WHERE order_id = %s AND status = 'pending'", (order_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
 
 @app.route('/generate_payment_qr', methods=['POST'])
 def generate_payment_qr():
@@ -863,6 +883,7 @@ def admin_dashboard():
                          pending_payments=pending_payments,
                          active_keys=active_keys,
                          format_datetime=format_datetime,
+                         binance_address=BINANCE_ADDRESS,
                          whatsapp_link=WHATSAPP_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
@@ -932,6 +953,48 @@ def reject_payment():
     return jsonify({'success': True, 'message': 'Payment rejected'})
 
 # ============================================
+# ADMIN - BINANCE PAYMENT CONTROLS
+# ============================================
+
+@app.route('/admin/delete_binance_payment', methods=['POST'])
+def delete_binance_payment():
+    """Admin delete any Binance payment"""
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    payment_id = data.get('payment_id')
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM payments WHERE id = %s AND payment_method = 'binance'", (payment_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'Binance payment deleted'})
+
+@app.route('/admin/force_expire_binance', methods=['POST'])
+def force_expire_binance():
+    """Admin force expire a Binance order"""
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    order_id = data.get('order_id')
+    
+    # Cancel on Binance API
+    binance_api.cancel_order(order_id)
+    
+    # Delete from database
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM payments WHERE order_id = %s", (order_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'Order expired and deleted'})
+
+# ============================================
 # ADMIN - TRACK SPECIFIC BINANCE ORDER
 # ============================================
 
@@ -941,12 +1004,11 @@ def track_binance(order_id):
         return jsonify({'success': False, 'error': 'Unauthorized'})
     
     result = binance_api.check_order(order_id)
-    address = binance_api.get_address(order_id)
     
     return jsonify({
         'order_status': result,
-        'address': address,
-        'note': 'For order ID 1143351874, address is fixed'
+        'binance_address': BINANCE_ADDRESS,
+        'note': 'Binance ID: 1143351874'
     })
 
 # ============================================
