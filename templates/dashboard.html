@@ -114,7 +114,17 @@
                                 <td>{{ license.product_name }}</td>
                                 <td>{{ license.days }} days</td>
                                 <td>{{ license.total_credits }}</td>
-                                <td>{{ license.expiry_date[:16] }}</td>
+                                <td>
+                                    {% if license.expiry_date %}
+                                        {% if license.expiry_date.strftime %}
+                                            {{ license.expiry_date.strftime('%Y-%m-%d %H:%M') }}
+                                        {% else %}
+                                            {{ license.expiry_date[:16] }}
+                                        {% endif %}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <span class="status-badge status-{{ license.status }}">
                                         {{ license.status }}
@@ -132,7 +142,7 @@
                 </div>
             </div>
 
-            <!-- Payment Status Section - NEW -->
+            <!-- Payment Status Section - FIXED LINE 164 -->
             <div class="card full-width" style="margin-top: 1rem;">
                 <h2><i class="fas fa-credit-card"></i> Your Payment History</h2>
                 <div class="table-container">
@@ -161,7 +171,17 @@
                                 <td><code>{{ payment.utr or payment.order_id }}</code></td>
                                 <td>₹{{ payment.amount }}</td>
                                 <td>{{ payment.credits_added }}</td>
-                                <td>{{ payment.date[:16] }}</td>
+                                <td>
+                                    {% if payment.date %}
+                                        {% if payment.date.strftime %}
+                                            {{ payment.date.strftime('%Y-%m-%d %H:%M') }}
+                                        {% else %}
+                                            {{ payment.date[:16] }}
+                                        {% endif %}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
                                 <td>
                                     {% if payment.status == 'approved' %}
                                     <span class="status-badge status-active">APPROVED</span>
