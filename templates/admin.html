@@ -93,7 +93,13 @@
                                     </span>
                                 </td>
                                 <td>₹{{ user.total_recharged or 0 }}</td>
-                                <td>{{ user.created_at[:10] if user.created_at else 'N/A' }}</td>
+                                <td>
+                                    {% if user.created_at %}
+                                        {{ user.created_at.strftime('%Y-%m-%d') if user.created_at.strftime else user.created_at[:10] }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <button class="btn-small btn-add-credits" data-username="{{ user.username }}">
                                         <i class="fas fa-plus-circle"></i> Add Credits
@@ -147,7 +153,13 @@
                                 </td>
                                 <td>₹{{ payment.amount }}</td>
                                 <td>{{ payment.credits_added }}</td>
-                                <td>{{ payment.date[:16] }}</td>
+                                <td>
+                                    {% if payment.date %}
+                                        {{ payment.date.strftime('%Y-%m-%d %H:%M') if payment.date.strftime else payment.date[:16] }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <span class="status-badge status-{{ payment.status }}">
                                         {{ payment.status }}
@@ -199,7 +211,13 @@
                                 <td>{{ license.product_name }}</td>
                                 <td>{{ license.days }} days</td>
                                 <td>{{ license.total_credits }}</td>
-                                <td>{{ license.expiry_date[:16] }}</td>
+                                <td>
+                                    {% if license.expiry_date %}
+                                        {{ license.expiry_date.strftime('%Y-%m-%d') if license.expiry_date.strftime else license.expiry_date[:10] }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <span class="status-badge status-{{ license.status }}">
                                         {{ license.status }}
@@ -319,7 +337,7 @@
             </div>
         </div>
 
-        <!-- KEY TYPES TAB -->
+        <!-- KEY TYPES TAB - FIXED -->
         <div id="keytypes-tab" class="tab-content">
             <div class="card">
                 <h2><i class="fas fa-cog"></i> Key Types Management</h2>
@@ -357,7 +375,7 @@
                     </div>
                 </div>
                 
-                <!-- Key Types Table -->
+                <!-- Key Types Table - FIXED HERE -->
                 <div class="table-container">
                     <table>
                         <thead>
@@ -374,7 +392,17 @@
                                 <td><strong>{{ key_type.type_name }}</strong></td>
                                 <td><code>{{ key_type.pattern }}</code></td>
                                 <td>{{ key_type.description }}</td>
-                                <td>{{ key_type.created_at[:10] }}</td>
+                                <td>
+                                    {% if key_type.created_at %}
+                                        {% if key_type.created_at.strftime %}
+                                            {{ key_type.created_at.strftime('%Y-%m-%d') }}
+                                        {% else %}
+                                            {{ key_type.created_at[:10] }}
+                                        {% endif %}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
