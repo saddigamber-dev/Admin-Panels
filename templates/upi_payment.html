@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPI Payment</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <img src="https://i.ibb.co/1GBn25c5/VID-20260310-172522-610-ezgif-com-video-to-gif-converter.gif" alt="Logo" class="nav-logo">
+            <div class="nav-credits">Credits: {{ session.credits }}</div>
+            <div class="nav-user">{{ session.username }}</div>
+            <a href="{{ url_for('payment_page') }}" class="btn-logout">← Back</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="payment-container">
+            <div class="card">
+                <div class="manual-payment-badge">
+                    <i class="fas fa-hand-holding-usd"></i> UPI MANUAL PAYMENT <i class="fas fa-clock"></i>
+                </div>
+                
+                <h2>UPI Recharge</h2>
+                
+                <div class="upi-info">
+                    <p><i class="fas fa-qrcode"></i> Pay to:</p>
+                    <p class="upi-id"><strong>{{ upi_id }}</strong></p>
+                    <p class="rate-info">💰 ₹1 = {{ credit_rate }} Credits</p>
+                    <p class="min-info">⚠️ Minimum: ₹{{ min_recharge }}</p>
+                </div>
+                
+                {% if success %}
+                <div class="success-message">
+                    <i class="fas fa-check-circle"></i>
+                    <h3>✅ PAYMENT SUBMITTED!</h3>
+                    <p>{{ success }}</p>
+                    <a href="{{ url_for('user_dashboard') }}" class="btn-primary">Back to Dashboard</a>
+                </div>
+                {% endif %}
+                
+                {% if error %}
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>❌ ERROR</h3>
+                    <p>{{ error }}</p>
+                </div>
+                {% endif %}
+                
+                {% if not success %}
+                <!-- QR Code -->
+                <div class="qr-container">
+                    <img src="data:image/png;base64,{{ qr_code }}" alt="UPI QR">
+                    <p class="amount-display">Amount: ₹<span id="qr-amount">{{ amount or min_recharge }}</span></p>
+                    <p class="credits-display-small">Credits: <span id="qr-credits">{{ (amount or min_recharge) * credit_rate }}</span></p>
+                </div>
+                
+                <!-- Amount Buttons -->
+                <div class="amount-buttons">
+                    <button class="amount-btn" data-amount="1000">₹1000</button>
+                    <button class="amount-btn" data-amount="2000">₹2000</button>
+                    <button class="amount-btn" data-amount="5000">₹5000</button>
+                    <button class="amount-btn" data-amount="10000">₹10000</button>
+                </div>
+                
+                <!-- Payment Form -->
+                <form method="POST">
+                    <div class="form-group">
+                        <label>Amount (₹)</label>
+                        <input type="number" id="amount" name="amount" min="{{ min_recharge }}" 
+                               value="{{ amount or min_recharge }}" required onchange="updateQR(this.value)">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>UTR Number (12 digits)</label>
+                        <input type="text" name="utr" pattern="\d{12}" maxlength="12" required 
+                               placeholder="Enter 12 digit UTR">
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-paper-plane"></i> Submit for Approval
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function updateQR(amount) {
+        if (amount < {{ min_recharge }}) {
+            alert(`Minimum amount is ₹{{ min_recharge }}`);
+            return;
+        }
+        
+        fetch('/generate_payment_qr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount: amount })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('qr-image').src = `data:image/png;base64,${data.qr_code}`;
+                document.getElementById('qr-amount').textContent = data.amount;
+                document.getElementById('qr-credits').textContent = data.credits;
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    }
+    
+    document.querySelectorAll('.amount-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const amount = this.dataset.amount;
+            document.getElementById('amount').value = amount;
+            document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('selected'));
+            this.classList.add('selected');
+            updateQR(amount);
+        });
+    });
+    </script>
+</body>
+</html>
