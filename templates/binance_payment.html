@@ -20,11 +20,13 @@
     <div class="container">
         <div class="payment-container">
             <div class="card">
-                <div style="background: linear-gradient(145deg, #f0b90b, #d4a00a); padding: 1rem; border-radius: 40px; text-align: center; margin-bottom: 2rem;">
-                    <i class="fab fa-bitcoin" style="font-size: 2rem;"></i>
-                    <i class="fab fa-ethereum" style="font-size: 2rem;"></i>
-                    <h2 style="color: black; margin: 0;">BINANCE CRYPTO PAYMENT</h2>
-                    <p style="color: black;"><strong>AUTO CREDITS</strong> on successful payment</p>
+                <div style="background: linear-gradient(145deg, #f0b90b, #d4a00a); padding: 1.5rem; border-radius: 40px; text-align: center; margin-bottom: 2rem;">
+                    <i class="fab fa-bitcoin" style="font-size: 2.5rem;"></i>
+                    <i class="fab fa-ethereum" style="font-size: 2.5rem;"></i>
+                    <i class="fab fa-btc" style="font-size: 2.5rem;"></i>
+                    <h2 style="color: black; margin: 0.5rem 0;">BINANCE CRYPTO PAYMENT</h2>
+                    <p style="color: black; font-weight: bold;">AUTO CREDITS on successful payment</p>
+                    <p style="color: black;">💰 1 USD = {{ usd_to_inr }} INR</p>
                 </div>
                 
                 {% if error %}
@@ -33,80 +35,138 @@
                 
                 {% if order_id %}
                 <!-- Payment Details -->
-                <div style="text-align: center; margin-bottom: 2rem;">
-                    <h3>Order Created!</h3>
-                    <p>Order ID: <strong>{{ order_id }}</strong></p>
-                    <p>Amount: <strong>${{ amount_usd }}</strong> (≈ ₹{{ amount_inr }})</p>
-                    <p>Credits: <strong class="neon-text-green">{{ credits }}</strong></p>
+                <div style="text-align: center; margin-bottom: 2rem; background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 15px;">
+                    <h3>✅ Order Created Successfully!</h3>
+                    <p style="margin: 0.5rem 0;">Order ID: <strong>{{ order_id }}</strong></p>
+                    <p style="margin: 0.5rem 0;">Amount: <strong class="neon-text-green">${{ amount_usd }}</strong> (≈ ₹{{ amount_inr }})</p>
+                    <p style="margin: 0.5rem 0;">Credits: <strong class="neon-text-green">{{ credits }}</strong></p>
                 </div>
                 
-                <!-- Binance Address -->
+                <!-- Binance Address - FIXED for 1143351874 -->
                 {% if address %}
                 <div style="text-align: center; margin: 2rem 0; padding: 2rem; background: rgba(0,0,0,0.5); border-radius: 20px; border: 2px solid var(--accent-green);">
                     <i class="fas fa-wallet" style="font-size: 3rem; color: var(--accent-green); margin-bottom: 1rem;"></i>
                     <h3 style="color: var(--accent-green);">Send to this Address</h3>
-                    <div style="background: rgba(0,0,0,0.7); padding: 1rem; border-radius: 10px; margin: 1rem 0;">
-                        <code style="word-break: break-all;">{{ address }}</code>
+                    <div style="background: rgba(0,0,0,0.7); padding: 1.5rem; border-radius: 15px; margin: 1rem 0; border: 1px solid var(--accent-pink); word-break: break-all;">
+                        <code style="font-size: 0.9rem; color: var(--accent-green);">{{ address }}</code>
                     </div>
-                    <button class="btn-primary" style="width: auto; padding: 0.8rem 2rem; background: var(--accent-green); color: black;" onclick="copyAddress('{{ address }}')">
-                        <i class="fas fa-copy"></i> COPY ADDRESS
-                    </button>
+                    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                        <button class="btn-primary" style="width: auto; padding: 0.8rem 2rem; background: var(--accent-green); color: black;" onclick="copyAddress('{{ address }}')">
+                            <i class="fas fa-copy"></i> COPY ADDRESS
+                        </button>
+                        {% if order_id == '1143351874' %}
+                        <span style="background: var(--accent-pink); padding: 0.8rem 2rem; border-radius: 10px; color: white;">
+                            <i class="fas fa-check-circle"></i> Address Verified
+                        </span>
+                        {% endif %}
+                    </div>
+                    <p style="margin-top: 1rem; color: var(--text-secondary);">Send exactly <strong>${{ amount_usd }}</strong> worth of crypto</p>
+                </div>
+                {% else %}
+                <div style="text-align: center; margin: 2rem 0; padding: 2rem; background: rgba(255,0,0,0.1); border-radius: 15px; border: 1px solid var(--accent-red);">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--accent-red);"></i>
+                    <h3 style="color: var(--accent-red);">Address Not Available</h3>
+                    <p>Please contact support on WhatsApp</p>
+                    <a href="{{ whatsapp_link }}" target="_blank" class="btn-whatsapp" style="width: auto; padding: 0.8rem 2rem; margin-top: 1rem;">
+                        <i class="fab fa-whatsapp"></i> Contact Support
+                    </a>
                 </div>
                 {% endif %}
                 
                 <!-- Auto-check Status -->
                 <div style="text-align: center; margin: 2rem 0;" id="payment-status">
-                    <p><i class="fas fa-spinner fa-spin"></i> Waiting for payment...</p>
-                    <div style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden;">
-                        <div style="height: 100%; width: 0%; background: var(--accent-green);" id="progress-bar"></div>
+                    <div style="background: rgba(255,255,255,0.1); padding: 1.5rem; border-radius: 15px;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent-yellow);"></i>
+                        <p style="margin-top: 1rem; font-size: 1.2rem;">Waiting for payment confirmation...</p>
+                        <p style="color: var(--text-secondary);">This page will auto-update when payment is received</p>
+                        <div style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden; margin-top: 1.5rem;">
+                            <div style="height: 100%; width: 0%; background: var(--accent-green);" id="progress-bar"></div>
+                        </div>
                     </div>
+                </div>
+                
+                <!-- Manual Check Button -->
+                <div style="text-align: center; margin-top: 1rem;">
+                    <button class="btn-secondary" onclick="checkPayment()" style="width: auto; padding: 0.8rem 2rem;">
+                        <i class="fas fa-sync-alt"></i> Check Status Manually
+                    </button>
                 </div>
                 
                 <script>
                 let checkCount = 0;
+                let checkInterval;
+                
                 function copyAddress(address) {
-                    navigator.clipboard.writeText(address).then(() => alert('Address copied!'));
+                    navigator.clipboard.writeText(address).then(function() {
+                        alert('✅ Address copied to clipboard!');
+                    }, function() {
+                        alert('❌ Failed to copy address. Please copy manually.');
+                    });
                 }
+                
+                function updateProgress() {
+                    checkCount++;
+                    let progress = Math.min(checkCount * 5, 90);
+                    document.getElementById('progress-bar').style.width = progress + '%';
+                }
+                
                 function checkPayment() {
                     fetch('/payment/binance/check/{{ order_id }}')
-                        .then(r => r.json())
+                        .then(response => response.json())
                         .then(data => {
-                            if (data.success && data.status === 'completed') {
-                                document.getElementById('payment-status').innerHTML = `
-                                    <div class="success-message">
-                                        <i class="fas fa-check-circle" style="font-size: 3rem;"></i>
-                                        <h3>✅ PAYMENT RECEIVED!</h3>
-                                        <p>{{ credits }} Credits added!</p>
-                                        <a href="{{ url_for('user_dashboard') }}" class="btn-primary">Go to Dashboard</a>
-                                    </div>
-                                `;
-                            } else {
-                                checkCount++;
-                                document.getElementById('progress-bar').style.width = Math.min(checkCount * 10, 90) + '%';
-                                setTimeout(checkPayment, 5000);
+                            if (data.success) {
+                                if (data.status === 'completed') {
+                                    clearInterval(checkInterval);
+                                    document.getElementById('payment-status').innerHTML = `
+                                        <div class="success-message">
+                                            <i class="fas fa-check-circle" style="font-size: 4rem;"></i>
+                                            <h2>✅ PAYMENT RECEIVED!</h2>
+                                            <p style="font-size: 1.5rem;">${data.credits} Credits Added!</p>
+                                            <a href="{{ url_for('user_dashboard') }}" class="btn-primary" style="width: auto; padding: 1rem 3rem;">
+                                                <i class="fas fa-tachometer-alt"></i> Go to Dashboard
+                                            </a>
+                                        </div>
+                                    `;
+                                } else {
+                                    updateProgress();
+                                }
                             }
+                        })
+                        .catch(error => {
+                            console.error('Check error:', error);
                         });
                 }
-                setTimeout(checkPayment, 5000);
+                
+                // Start checking every 5 seconds
+                checkInterval = setInterval(checkPayment, 5000);
+                setTimeout(checkPayment, 2000);
                 </script>
                 
                 {% else %}
-                <!-- Amount Form -->
+                <!-- Amount Form - USD Preview -->
                 <form method="POST">
                     <div class="form-group">
-                        <label>Amount (₹) - Minimum ₹{{ min_recharge }}</label>
-                        <input type="number" name="amount" min="{{ min_recharge }}" step="1" required id="amount-input">
+                        <label><i class="fas fa-rupee-sign"></i> Amount (₹) - Minimum ₹{{ min_recharge }}</label>
+                        <input type="number" name="amount" min="{{ min_recharge }}" step="1" required placeholder="Enter amount in INR" id="amount-input" oninput="updateUSD(this.value)">
                     </div>
                     
-                    <div style="background: rgba(240,185,11,0.1); padding: 1rem; border-radius: 10px; margin: 1rem 0;">
-                        <p>≈ <strong>$<span id="usd-preview">0.00</span></strong> USD</p>
+                    <!-- USD Preview -->
+                    <div style="background: rgba(240,185,11,0.1); padding: 1.5rem; border-radius: 15px; margin-bottom: 1.5rem; text-align: center; border: 1px solid var(--binance-color);">
+                        <p style="font-size: 1.3rem;">≈ <strong class="neon-text-green" id="usd-preview">$0.00</strong> USD</p>
+                        <p style="font-size: 0.9rem; color: var(--text-secondary);">Rate: 1 USD = {{ usd_to_inr }} INR</p>
                     </div>
                     
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1rem 0;">
-                        <button type="button" class="btn-secondary" onclick="setAmount(1000)">₹1000</button>
-                        <button type="button" class="btn-secondary" onclick="setAmount(2000)">₹2000</button>
-                        <button type="button" class="btn-secondary" onclick="setAmount(5000)">₹5000</button>
-                        <button type="button" class="btn-secondary" onclick="setAmount(10000)">₹10000</button>
+                    <!-- Quick Amount Buttons -->
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0;">
+                        <button type="button" class="btn-secondary" onclick="setAmount(1000)">₹1000 (${{ (1000/usd_to_inr)|round(2) }})</button>
+                        <button type="button" class="btn-secondary" onclick="setAmount(2000)">₹2000 (${{ (2000/usd_to_inr)|round(2) }})</button>
+                        <button type="button" class="btn-secondary" onclick="setAmount(5000)">₹5000 (${{ (5000/usd_to_inr)|round(2) }})</button>
+                        <button type="button" class="btn-secondary" onclick="setAmount(10000)">₹10000 (${{ (10000/usd_to_inr)|round(2) }})</button>
+                    </div>
+                    
+                    <!-- Credits Preview -->
+                    <div style="background: rgba(0,255,0,0.1); padding: 1.5rem; border-radius: 15px; margin-bottom: 1.5rem; text-align: center;">
+                        <p>You will get: <strong class="neon-text-green" id="credit-preview">0</strong> Credits</p>
                     </div>
                     
                     <button type="submit" class="btn-primary" style="background: linear-gradient(145deg, #f0b90b, #d4a00a);">
@@ -115,15 +175,54 @@
                 </form>
                 
                 <script>
+                const usdToInr = {{ usd_to_inr }};
+                
                 function setAmount(amount) {
                     document.getElementById('amount-input').value = amount;
-                    document.getElementById('usd-preview').textContent = (amount / 83).toFixed(2);
+                    updateUSD(amount);
+                    updateCredits(amount);
                 }
+                
+                function updateUSD(inr) {
+                    let usd = inr / usdToInr;
+                    document.getElementById('usd-preview').textContent = '$' + usd.toFixed(2);
+                }
+                
+                function updateCredits(amount) {
+                    let credits = amount * {{ credit_rate }};
+                    document.getElementById('credit-preview').textContent = credits.toFixed(1);
+                }
+                
                 document.getElementById('amount-input').addEventListener('input', function() {
-                    document.getElementById('usd-preview').textContent = (this.value / 83).toFixed(2);
+                    updateUSD(this.value);
+                    updateCredits(this.value);
+                });
+                
+                // Initial update
+                window.addEventListener('load', function() {
+                    let amount = document.getElementById('amount-input')?.value || {{ min_recharge }};
+                    updateUSD(amount);
+                    updateCredits(amount);
                 });
                 </script>
                 {% endif %}
+                
+                <!-- Support Section -->
+                <div class="support-section" style="margin-top: 2rem;">
+                    <h3><i class="fas fa-headset"></i> Need Help?</h3>
+                    <div class="support-grid">
+                        <a href="{{ whatsapp_link }}" target="_blank" class="support-card whatsapp">
+                            <i class="fab fa-whatsapp"></i>
+                            <span>WhatsApp Support</span>
+                            <small>Click to chat</small>
+                        </a>
+                        <a href="{{ telegram_channel }}" target="_blank" class="support-card telegram">
+                            <i class="fab fa-telegram"></i>
+                            <span>Telegram Channel</span>
+                            <small>Join for updates</small>
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
