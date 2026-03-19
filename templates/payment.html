@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recharge Credits - Neon Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <img src="https://i.ibb.co/1GBn25c5/VID-20260310-172522-610-ezgif-com-video-to-gif-converter.gif" alt="Logo" class="nav-logo">
+            <div class="nav-credits">Credits: {{ session.credits }}</div>
+            <div class="nav-user">{{ session.username }}</div>
+            <a href="{{ url_for('user_dashboard') }}" class="btn-logout">Back to Dashboard</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="payment-container">
+            <div class="card">
+                <h1 class="neon-text" style="text-align: center;">💰 Recharge Credits</h1>
+                <p style="text-align: center; color: var(--accent-green);">1 Rupee = {{ credit_rate }} Credits</p>
+                
+                <!-- Payment Method Selection -->
+                <div style="display: flex; gap: 1rem; margin: 2rem 0; justify-content: center; flex-wrap: wrap;">
+                    <a href="{{ url_for('upi_payment') }}" class="btn-primary" style="width: auto; padding: 1rem 3rem;">
+                        <i class="fas fa-mobile-alt"></i> UPI Payment
+                    </a>
+                    <a href="{{ url_for('binance_payment') }}" class="btn-primary" style="width: auto; padding: 1rem 3rem; background: linear-gradient(145deg, #f0b90b, #d4a00a);">
+                        <i class="fab fa-bitcoin"></i> Binance Crypto
+                    </a>
+                </div>
+                
+                <!-- Info Box -->
+                <div style="text-align: center; padding: 2rem; background: rgba(0,0,0,0.3); border-radius: 15px;">
+                    <i class="fas fa-info-circle" style="font-size: 3rem; color: var(--accent-pink); margin-bottom: 1rem;"></i>
+                    <h3>Choose Your Payment Method</h3>
+                    <p style="margin-top: 1rem;">
+                        <strong>UPI:</strong> Manual approval (UTR required)<br>
+                        <strong>Binance:</strong> Auto credits on payment
+                    </p>
+                    <p style="margin-top: 1rem; color: var(--accent-yellow);">
+                        Minimum: ₹{{ min_recharge }}
+                    </p>
+                </div>
+                
+                <!-- Support Section -->
+                <div class="support-section" style="margin-top: 2rem;">
+                    <h3><i class="fas fa-headset"></i> Need Help?</h3>
+                    <div class="support-grid">
+                        <a href="{{ whatsapp_link }}" target="_blank" class="support-card whatsapp">
+                            <i class="fab fa-whatsapp"></i>
+                            <span>WhatsApp Support</span>
+                        </a>
+                        <a href="{{ telegram_channel }}" target="_blank" class="support-card telegram">
+                            <i class="fab fa-telegram"></i>
+                            <span>Telegram Channel</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
