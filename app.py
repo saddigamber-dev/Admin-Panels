@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from flask_bcrypt import Bcrypt
 import secrets
 import string
@@ -29,67 +29,41 @@ bcrypt = Bcrypt(app)
 logging.basicConfig(level=logging.DEBUG)
 
 # ============================================
-# DATABASE CONNECTION - SMART URL SELECTOR
+# DATABASE CONNECTION
 # ============================================
 
-# External URL (for local development)
 EXTERNAL_DATABASE_URL = 'postgresql://admin_panels_user:kRkEd8Zr8wCqJlXUNsnlNvgBqQOgHthi@dpg-d6ts46juibrs73eo0750-a.oregon-postgres.render.com/admin_panels'
-
-# Internal URL (for Render deployment)
 INTERNAL_DATABASE_URL = 'postgresql://admin_panels_user:kRkEd8Zr8wCqJlXUNsnlNvgBqQOgHthi@dpg-d6ts46juibrs73eo0750-a/admin_panels'
 
 def is_running_on_render():
-    """Check if we're running on Render.com"""
     return os.getenv('RENDER', False) or os.getenv('RENDER_EXTERNAL_URL', False)
 
 def get_database_url():
-    """Smartly choose between internal and external URL"""
     if is_running_on_render():
-        logging.info("✅ Running on Render - Using INTERNAL database URL")
+        logging.info("✅ Using INTERNAL database URL")
         return INTERNAL_DATABASE_URL
     else:
-        logging.info("✅ Running locally - Using EXTERNAL database URL")
+        logging.info("✅ Using EXTERNAL database URL")
         return EXTERNAL_DATABASE_URL
 
 def get_db_connection():
-    """Get database connection with automatic failover"""
     primary_url = get_database_url()
-    
     try:
-        conn = psycopg2.connect(
-            primary_url,
-            connect_timeout=10,
-            cursor_factory=RealDictCursor
-        )
+        conn = psycopg2.connect(primary_url, connect_timeout=10, cursor_factory=RealDictCursor)
         return conn
     except Exception as e:
-        logging.error(f"❌ Primary DB connection failed: {e}")
-        
-        # Try fallback URL
-        if primary_url == INTERNAL_DATABASE_URL:
-            fallback_url = EXTERNAL_DATABASE_URL
-        else:
-            fallback_url = INTERNAL_DATABASE_URL
-        
-        logging.info(f"🔄 Trying fallback URL...")
-        
+        logging.error(f"❌ Primary DB failed: {e}")
+        fallback_url = EXTERNAL_DATABASE_URL if primary_url == INTERNAL_DATABASE_URL else INTERNAL_DATABASE_URL
         try:
-            conn = psycopg2.connect(
-                fallback_url,
-                connect_timeout=10,
-                cursor_factory=RealDictCursor
-            )
+            conn = psycopg2.connect(fallback_url, connect_timeout=10, cursor_factory=RealDictCursor)
             logging.info("✅ Fallback connection successful!")
             return conn
         except Exception as e2:
             logging.error(f"❌ Fallback also failed: {e2}")
-            raise Exception(f"Database connection failed")
+            raise Exception("Database connection failed")
 
 def init_db():
-    """Initialize database tables"""
     try:
-        logging.info("🔄 Initializing database...")
-        
         conn = get_db_connection()
         c = conn.cursor()
         
@@ -136,7 +110,7 @@ def init_db():
             )
         ''')
         
-        # Payments table
+        # Payments table - ADDED rejection_reason
         c.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id SERIAL PRIMARY KEY,
@@ -147,6 +121,7 @@ def init_db():
                 amount DECIMAL(10,2) NOT NULL,
                 credits_added DECIMAL(10,2) DEFAULT 0,
                 status VARCHAR(50) DEFAULT 'pending',
+                rejection_reason TEXT,
                 date TIMESTAMP NOT NULL,
                 approved_date TIMESTAMP,
                 approved_by VARCHAR(100),
@@ -237,12 +212,10 @@ def init_db():
         conn.close()
         logging.info("✅ Database initialized successfully!")
         return True
-        
     except Exception as e:
         logging.error(f"❌ Database initialization error: {e}")
         return False
 
-# Initialize DB
 init_db()
 
 # ============================================
@@ -256,6 +229,7 @@ UPI_NAME = os.getenv('UPI_NAME', 'Digamber Raj')
 WHATSAPP_LINK = os.getenv('WHATSAPP_LINK', 'https://wa.me/message/IGTHSKO23KP4H1')
 TELEGRAM_CHANNEL = os.getenv('TELEGRAM_CHANNEL', 'https://t.me/growmarthq')
 BINANCE_API_URL = os.getenv('BINANCE_API_URL', 'https://binance-verifier.onrender.com')
+USD_TO_INR = 98  # 1$ = 98 INR
 
 # ============================================
 # KEY GENERATOR CLASS
@@ -376,11 +350,11 @@ class BinanceAPI:
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
-    def create_order(self, amount, email=None):
-        order_id = f"ORD{int(time.time())}{random.randint(100,999)}"
+    def create_order(self, amount_usd, email=None):
+        order_id = f"BNB{int(time.time())}{random.randint(100,999)}"
         return self._request('/api/create-order', 'POST', {
             'orderId': order_id,
-            'amount': float(amount),
+            'amount': float(amount_usd),
             'customerEmail': email
         })
     
@@ -392,8 +366,10 @@ class BinanceAPI:
         result = self._request(f'/api/address/{order_id}')
         if result and result.get('address'):
             return result
-        # Fallback for testing
-        return {'address': '0x742d35Cc6634C0532925a3b844Bc5e7e7a9d1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9'}
+        # For specific order ID 1143351874
+        if order_id == '1143351874':
+            return {'address': '0x742d35Cc6634C0532925a3b844Bc5e7e7a9d1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9'}
+        return {'address': None}
 
 binance_api = BinanceAPI()
 
@@ -402,7 +378,7 @@ binance_api = BinanceAPI()
 # ============================================
 
 def generate_upi_qr(amount):
-    """Generate UPI QR code - PEHLE JAISA"""
+    """Generate UPI QR code for specific amount"""
     try:
         upi_url = f"upi://pay?pa={UPI_ID}&pn={UPI_NAME}&am={amount}&cu=INR"
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
@@ -513,14 +489,28 @@ def user_dashboard():
     ''', (session['username'],))
     licenses = c.fetchall()
     
+    # Get user's payments with status
+    c.execute('''
+        SELECT * FROM payments 
+        WHERE username = %s 
+        ORDER BY date DESC 
+        LIMIT 20
+    ''', (session['username'],))
+    payments = c.fetchall()
+    
     conn.close()
     
     return render_template('dashboard.html',
                          user=user,
                          products=products,
                          licenses=licenses,
+                         payments=payments,
                          whatsapp_link=WHATSAPP_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
+
+# ============================================
+# KEY GENERATION
+# ============================================
 
 @app.route('/generate_key', methods=['POST'])
 def generate_key_route():
@@ -571,7 +561,7 @@ def generate_key_route():
     return jsonify({'success': True, 'key': key})
 
 # ============================================
-# PAYMENT ROUTES - UPI (PEHLE JAISA)
+# PAYMENT ROUTES
 # ============================================
 
 @app.route('/payment')
@@ -588,7 +578,7 @@ def payment_page():
 
 @app.route('/payment/upi', methods=['GET', 'POST'])
 def upi_payment():
-    """UPI Payment - PEHLE JAISA BILKUL"""
+    """UPI Payment - Dynamic QR based on user input"""
     if 'username' not in session:
         return redirect(url_for('login'))
     
@@ -601,14 +591,18 @@ def upi_payment():
                                  error=f'Minimum amount is ₹{MINIMUM_RECHARGE}',
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
-                                 upi_id=UPI_ID)
+                                 upi_id=UPI_ID,
+                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_channel=TELEGRAM_CHANNEL)
         
         if not utr or len(utr) != 12 or not utr.isdigit():
             return render_template('upi_payment.html',
                                  error='Please enter a valid 12-digit UTR number',
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
-                                 upi_id=UPI_ID)
+                                 upi_id=UPI_ID,
+                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_channel=TELEGRAM_CHANNEL)
         
         credits = amount * CREDIT_RATE
         
@@ -628,26 +622,33 @@ def upi_payment():
                                  success=f'Payment submitted! ₹{amount} = {credits} credits pending approval.',
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
-                                 upi_id=UPI_ID)
+                                 upi_id=UPI_ID,
+                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_channel=TELEGRAM_CHANNEL)
         except:
             conn.close()
             return render_template('upi_payment.html',
                                  error='UTR already exists!',
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
-                                 upi_id=UPI_ID)
+                                 upi_id=UPI_ID,
+                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_channel=TELEGRAM_CHANNEL)
     
-    # GET request
+    # GET request - generate QR for minimum amount initially
     qr_code = generate_upi_qr(MINIMUM_RECHARGE)
     return render_template('upi_payment.html',
                          qr_code=qr_code,
+                         amount=MINIMUM_RECHARGE,
                          min_recharge=MINIMUM_RECHARGE,
                          credit_rate=CREDIT_RATE,
-                         upi_id=UPI_ID)
+                         upi_id=UPI_ID,
+                         whatsapp_link=WHATSAPP_LINK,
+                         telegram_channel=TELEGRAM_CHANNEL)
 
 @app.route('/payment/binance', methods=['GET', 'POST'])
 def binance_payment():
-    """Binance Crypto Payment - USD mein show"""
+    """Binance Crypto Payment - USD based on 98 INR = 1$"""
     if 'username' not in session:
         return redirect(url_for('login'))
     
@@ -659,11 +660,12 @@ def binance_payment():
                                  error=f'Minimum ₹{MINIMUM_RECHARGE}',
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
+                                 usd_to_inr=USD_TO_INR,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         
-        # Convert to USD for Binance (approximate)
-        amount_usd = round(amount_inr / 83, 2)
+        # Convert to USD (98 INR = 1$)
+        amount_usd = round(amount_inr / USD_TO_INR, 2)
         
         result = binance_api.create_order(amount_usd, f"{session['username']}@user.com")
         
@@ -694,6 +696,7 @@ def binance_payment():
                                  address=address_data.get('address'),
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
+                                 usd_to_inr=USD_TO_INR,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         else:
@@ -701,12 +704,14 @@ def binance_payment():
                                  error='Binance service unavailable',
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
+                                 usd_to_inr=USD_TO_INR,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
     
     return render_template('binance_payment.html',
                          min_recharge=MINIMUM_RECHARGE,
                          credit_rate=CREDIT_RATE,
+                         usd_to_inr=USD_TO_INR,
                          whatsapp_link=WHATSAPP_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
@@ -754,7 +759,7 @@ def check_binance_payment(order_id):
 
 @app.route('/generate_payment_qr', methods=['POST'])
 def generate_payment_qr():
-    """Generate UPI QR for amount"""
+    """Generate UPI QR for specific amount - DYNAMIC"""
     if 'username' not in session:
         return jsonify({'success': False, 'error': 'Not logged in'})
     
@@ -806,10 +811,12 @@ def admin_dashboard():
     c.execute("SELECT * FROM users WHERE role != 'admin' ORDER BY credits DESC")
     users = c.fetchall()
     
-    # Payments
+    # All payments with user info
     c.execute('''
-        SELECT * FROM payments 
-        ORDER BY CASE status WHEN 'pending' THEN 1 ELSE 2 END, date DESC
+        SELECT p.*, u.username as user_name 
+        FROM payments p
+        LEFT JOIN users u ON p.username = u.username
+        ORDER BY CASE p.status WHEN 'pending' THEN 1 ELSE 2 END, p.date DESC
     ''')
     payments = c.fetchall()
     
@@ -842,7 +849,7 @@ def admin_dashboard():
                          telegram_channel=TELEGRAM_CHANNEL)
 
 # ============================================
-# ADMIN - PAYMENT ACTIONS
+# ADMIN - PAYMENT ACTIONS (APPROVE/REJECT WITH REASON)
 # ============================================
 
 @app.route('/admin/approve_payment', methods=['POST'])
@@ -863,12 +870,14 @@ def approve_payment():
         conn.close()
         return jsonify({'success': False, 'error': 'Payment not found'})
     
+    # Update payment
     c.execute('''
         UPDATE payments 
-        SET status = 'approved', approved_date = %s, approved_by = %s
+        SET status = 'approved', approved_date = %s, approved_by = %s, rejection_reason = NULL
         WHERE id = %s
     ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), session['username'], payment_id))
     
+    # Add credits to user
     c.execute('''
         UPDATE users 
         SET credits = credits + %s, total_recharged = total_recharged + %s
@@ -878,25 +887,49 @@ def approve_payment():
     conn.commit()
     conn.close()
     
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'message': 'Payment approved successfully'})
 
 @app.route('/admin/reject_payment', methods=['POST'])
 def reject_payment():
+    """Reject payment with reason - user ko message jayega"""
     if 'username' not in session or session.get('role') != 'admin':
         return jsonify({'success': False, 'error': 'Unauthorized'})
     
     data = request.get_json()
     payment_id = data.get('payment_id')
+    reason = data.get('reason', 'Payment rejected by admin')
     
     conn = get_db_connection()
     c = conn.cursor()
+    
     c.execute('''
-        UPDATE payments SET status = 'rejected' WHERE id = %s
-    ''', (payment_id,))
+        UPDATE payments 
+        SET status = 'rejected', rejection_reason = %s, approved_by = %s
+        WHERE id = %s
+    ''', (reason, session['username'], payment_id))
+    
     conn.commit()
     conn.close()
     
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'message': 'Payment rejected'})
+
+# ============================================
+# ADMIN - TRACK SPECIFIC BINANCE ORDER
+# ============================================
+
+@app.route('/admin/track_binance/<order_id>')
+def track_binance(order_id):
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    result = binance_api.check_order(order_id)
+    address = binance_api.get_address(order_id)
+    
+    return jsonify({
+        'order_status': result,
+        'address': address,
+        'note': 'For order ID 1143351874, address is fixed'
+    })
 
 # ============================================
 # ADMIN - PRODUCT MANAGEMENT
