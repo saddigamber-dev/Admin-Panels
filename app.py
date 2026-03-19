@@ -110,7 +110,7 @@ def init_db():
             )
         ''')
         
-        # Payments table - WITH REJECTION_REASON
+        # Payments table - WITH ALL COLUMNS
         c.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id SERIAL PRIMARY KEY,
@@ -220,36 +220,74 @@ def init_db():
 init_db()
 
 # ============================================
-# ADD MISSING COLUMN IF NEEDED
+# ADD MISSING COLUMNS IF NEEDED
 # ============================================
 
-def add_rejection_column():
-    """Add rejection_reason column if not exists"""
+def add_missing_columns():
+    """Add missing columns to payments table"""
     try:
         conn = get_db_connection()
         c = conn.cursor()
         
-        # Check if column exists
+        # Check and add rejection_reason column
         c.execute("""
             SELECT column_name 
             FROM information_schema.columns 
             WHERE table_name='payments' AND column_name='rejection_reason'
         """)
-        exists = c.fetchone()
-        
-        if not exists:
+        if not c.fetchone():
             c.execute("ALTER TABLE payments ADD COLUMN rejection_reason TEXT")
-            conn.commit()
-            logging.info("✅ Added rejection_reason column to payments table")
+            logging.info("✅ Added rejection_reason column")
         
+        # Check and add expiry_time column
+        c.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='payments' AND column_name='expiry_time'
+        """)
+        if not c.fetchone():
+            c.execute("ALTER TABLE payments ADD COLUMN expiry_time TIMESTAMP")
+            logging.info("✅ Added expiry_time column")
+        
+        # Check and add approved_date column
+        c.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='payments' AND column_name='approved_date'
+        """)
+        if not c.fetchone():
+            c.execute("ALTER TABLE payments ADD COLUMN approved_date TIMESTAMP")
+            logging.info("✅ Added approved_date column")
+        
+        # Check and add approved_by column
+        c.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='payments' AND column_name='approved_by'
+        """)
+        if not c.fetchone():
+            c.execute("ALTER TABLE payments ADD COLUMN approved_by VARCHAR(100)")
+            logging.info("✅ Added approved_by column")
+        
+        # Check and add binance_data column
+        c.execute("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='payments' AND column_name='binance_data'
+        """)
+        if not c.fetchone():
+            c.execute("ALTER TABLE payments ADD COLUMN binance_data TEXT")
+            logging.info("✅ Added binance_data column")
+        
+        conn.commit()
         conn.close()
         return True
     except Exception as e:
-        logging.error(f"❌ Error adding column: {e}")
+        logging.error(f"❌ Error adding columns: {e}")
         return False
 
 # Call this after init_db
-add_rejection_column()
+add_missing_columns()
 
 # ============================================
 # CONSTANTS
