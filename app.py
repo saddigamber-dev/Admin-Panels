@@ -392,6 +392,16 @@ def generate_upi_qr(amount):
         logging.error(f"QR Error: {e}")
         return None
 
+def format_datetime(dt):
+    """Safely format datetime for templates"""
+    if dt is None:
+        return 'N/A'
+    if hasattr(dt, 'strftime'):
+        return dt.strftime('%Y-%m-%d %H:%M')
+    if isinstance(dt, str):
+        return dt[:16]
+    return str(dt)
+
 # ============================================
 # AUTH ROUTES
 # ============================================
@@ -464,7 +474,7 @@ def logout():
     return redirect(url_for('login'))
 
 # ============================================
-# USER DASHBOARD
+# USER DASHBOARD - FIXED WITH format_datetime
 # ============================================
 
 @app.route('/dashboard')
@@ -505,6 +515,7 @@ def user_dashboard():
                          products=products,
                          licenses=licenses,
                          payments=payments,
+                         format_datetime=format_datetime,
                          whatsapp_link=WHATSAPP_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
@@ -851,6 +862,7 @@ def admin_dashboard():
                          total_credits_sold=total_credits_sold,
                          pending_payments=pending_payments,
                          active_keys=active_keys,
+                         format_datetime=format_datetime,
                          whatsapp_link=WHATSAPP_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
