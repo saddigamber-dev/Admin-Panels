@@ -27,21 +27,16 @@ bcrypt = Bcrypt(app)
 logging.basicConfig(level=logging.DEBUG)
 
 # ============================================
-# DATABASE CONNECTION - SMART URL SELECTOR
+# DATABASE CONNECTION
 # ============================================
 
-# External URL (for local development)
 EXTERNAL_DATABASE_URL = 'postgresql://admin_panels_user:kRkEd8Zr8wCqJlXUNsnlNvgBqQOgHthi@dpg-d6ts46juibrs73eo0750-a.oregon-postgres.render.com/admin_panels'
-
-# Internal URL (for Render deployment)
 INTERNAL_DATABASE_URL = 'postgresql://admin_panels_user:kRkEd8Zr8wCqJlXUNsnlNvgBqQOgHthi@dpg-d6ts46juibrs73eo0750-a/admin_panels'
 
 def is_running_on_render():
-    """Check if we're running on Render.com"""
     return os.getenv('RENDER', False) or os.getenv('RENDER_EXTERNAL_URL', False)
 
 def get_database_url():
-    """Smartly choose between internal and external URL"""
     if is_running_on_render():
         logging.info("✅ Running on Render - Using INTERNAL database URL")
         return INTERNAL_DATABASE_URL
@@ -50,7 +45,6 @@ def get_database_url():
         return EXTERNAL_DATABASE_URL
 
 def test_database_connection(url):
-    """Test if database URL is reachable"""
     try:
         import re
         match = re.search(r'@([^:/]+)', url)
@@ -68,7 +62,6 @@ def test_database_connection(url):
         return False
 
 def get_db_connection():
-    """Get database connection with automatic failover"""
     primary_url = get_database_url()
     
     try:
@@ -101,7 +94,6 @@ def get_db_connection():
             raise Exception(f"Database connection failed: {e} / {e2}")
 
 def init_db():
-    """Initialize database tables"""
     try:
         logging.info("🔄 Initializing database...")
         
@@ -459,6 +451,14 @@ def generate_upi_qr(amount):
         logging.error(f"QR Generation Error: {e}")
         return None
 
+def format_date(date_obj):
+    """Safely format datetime object"""
+    if date_obj is None:
+        return 'N/A'
+    if hasattr(date_obj, 'strftime'):
+        return date_obj.strftime('%Y-%m-%d %H:%M')
+    return str(date_obj)[:16]
+
 # ============================================
 # ROUTES - AUTHENTICATION
 # ============================================
@@ -562,7 +562,6 @@ def user_dashboard():
         conn = get_db_connection()
         c = conn.cursor()
         
-        # Get user
         c.execute("SELECT * FROM users WHERE username = %s", (session['username'],))
         user = c.fetchone()
         
@@ -573,7 +572,6 @@ def user_dashboard():
         
         session['credits'] = float(user['credits'])
         
-        # Get active products
         c.execute('''
             SELECT * FROM products 
             WHERE is_active = TRUE 
@@ -581,7 +579,6 @@ def user_dashboard():
         ''')
         products = c.fetchall()
         
-        # Get user's licenses
         c.execute('''
             SELECT * FROM licenses 
             WHERE username = %s 
@@ -617,7 +614,6 @@ def generate_key_route():
         conn = get_db_connection()
         c = conn.cursor()
         
-        # Get product
         c.execute("SELECT * FROM products WHERE id = %s", (product_id,))
         product = c.fetchone()
         
@@ -627,7 +623,6 @@ def generate_key_route():
         
         total_credits = float(product['credit_cost_per_day']) * days
         
-        # Check user credits
         c.execute("SELECT credits FROM users WHERE username = %s", (session['username'],))
         user_credits = c.fetchone()['credits']
         
@@ -635,17 +630,14 @@ def generate_key_route():
             conn.close()
             return jsonify({'success': False, 'error': f'Need {total_credits} credits'})
         
-        # Generate key
         key = key_gen.generate_key(product['key_type'], product.get('custom_key_pattern'))
         expiry = datetime.now() + timedelta(days=days)
         
-        # Deduct credits
         c.execute('''
             UPDATE users SET credits = credits - %s 
             WHERE username = %s
         ''', (total_credits, session['username']))
         
-        # Save license
         c.execute('''
             INSERT INTO licenses 
             (key, username, product_name, days, total_credits, expiry_date, status)
@@ -786,7 +778,6 @@ def upi_payment():
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID)
     
-    # GET request
     qr = generate_upi_qr(MINIMUM_RECHARGE)
     return render_template('upi_payment.html',
                          qr_code=qr,
@@ -808,7 +799,6 @@ def binance_payment():
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE)
         
-        # Create Binance order
         result = binance_api.create_order(amount, f"{session['username']}@user.com")
         
         if result and result.get('success'):
@@ -827,7 +817,6 @@ def binance_payment():
             conn.commit()
             conn.close()
             
-            # Get QR and address
             qr_data = binance_api.get_qr(order_id)
             address_data = binance_api.get_address(order_id)
             
@@ -846,7 +835,6 @@ def binance_payment():
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE)
     
-    # GET request
     return render_template('binance_payment.html',
                          min_recharge=MINIMUM_RECHARGE,
                          credit_rate=CREDIT_RATE)
@@ -857,26 +845,22 @@ def check_binance_payment(order_id):
         return jsonify({'success': False, 'error': 'Not logged in'})
     
     try:
-        # Check with Binance API
         result = binance_api.check_order(order_id)
         
         if result and result.get('status') == 'completed':
             conn = get_db_connection()
             c = conn.cursor()
             
-            # Get payment record
             c.execute("SELECT * FROM payments WHERE order_id = %s", (order_id,))
             payment = c.fetchone()
             
             if payment and payment['status'] == 'pending':
-                # Update payment
                 c.execute('''
                     UPDATE payments 
                     SET status = 'approved', approved_date = %s
                     WHERE order_id = %s
                 ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), order_id))
                 
-                # Add credits to user
                 c.execute('''
                     UPDATE users 
                     SET credits = credits + %s, total_recharged = total_recharged + %s
@@ -886,7 +870,6 @@ def check_binance_payment(order_id):
                 conn.commit()
                 conn.close()
                 
-                # Update session
                 session['credits'] = session.get('credits', 0) + payment['credits_added']
                 
                 return jsonify({
@@ -946,7 +929,6 @@ def admin_dashboard():
         conn = get_db_connection()
         c = conn.cursor()
         
-        # Stats
         c.execute("SELECT COUNT(*) FROM users WHERE role = 'user'")
         total_users = c.fetchone()['count']
         
@@ -962,26 +944,21 @@ def admin_dashboard():
         c.execute("SELECT COUNT(*) FROM licenses WHERE status = 'active'")
         active_keys = c.fetchone()['count']
         
-        # Users
         c.execute("SELECT * FROM users WHERE role != 'admin' ORDER BY credits DESC")
         users = c.fetchall()
         
-        # Payments
         c.execute('''
             SELECT * FROM payments 
             ORDER BY CASE status WHEN 'pending' THEN 1 ELSE 2 END, date DESC
         ''')
         payments = c.fetchall()
         
-        # Licenses
         c.execute("SELECT * FROM licenses ORDER BY expiry_date DESC LIMIT 100")
         licenses = c.fetchall()
         
-        # Products
         c.execute("SELECT * FROM products ORDER BY name")
         products = c.fetchall()
         
-        # Key types
         c.execute("SELECT * FROM key_types ORDER BY type_name")
         key_types = c.fetchall()
         
@@ -999,7 +976,8 @@ def admin_dashboard():
                              pending_payments=pending_payments,
                              active_keys=active_keys,
                              whatsapp_link=WHATSAPP_LINK,
-                             telegram_channel=TELEGRAM_CHANNEL)
+                             telegram_channel=TELEGRAM_CHANNEL,
+                             format_date=format_date)
     
     except Exception as e:
         logging.error(f"Admin Dashboard Error: {e}")
@@ -1022,7 +1000,6 @@ def approve_payment():
         conn = get_db_connection()
         c = conn.cursor()
         
-        # Get payment
         c.execute("SELECT * FROM payments WHERE id = %s", (payment_id,))
         payment = c.fetchone()
         
@@ -1030,14 +1007,12 @@ def approve_payment():
             conn.close()
             return jsonify({'success': False, 'error': 'Payment not found'})
         
-        # Update payment
         c.execute('''
             UPDATE payments 
             SET status = 'approved', approved_date = %s, approved_by = %s
             WHERE id = %s
         ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), session['username'], payment_id))
         
-        # Add credits to user
         c.execute('''
             UPDATE users 
             SET credits = credits + %s, total_recharged = total_recharged + %s
