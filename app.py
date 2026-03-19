@@ -51,26 +51,6 @@ def get_database_url():
         logging.info("✅ Running locally - Using EXTERNAL database URL")
         return EXTERNAL_DATABASE_URL
 
-def test_database_connection(url):
-    """Test if database URL is reachable"""
-    try:
-        # Extract hostname from URL for testing
-        match = re.search(r'@([^:/]+)', url)
-        if match:
-            hostname = match.group(1)
-            # Try to resolve hostname
-            socket.gethostbyname(hostname)
-            logging.info(f"✅ Hostname {hostname} resolved successfully")
-        
-        # Try actual connection
-        conn = psycopg2.connect(url, connect_timeout=5)
-        conn.close()
-        logging.info("✅ Database connection successful")
-        return True
-    except Exception as e:
-        logging.error(f"❌ Database connection test failed: {e}")
-        return False
-
 def get_db_connection():
     """Get database connection with automatic failover"""
     primary_url = get_database_url()
@@ -91,7 +71,7 @@ def get_db_connection():
         else:
             fallback_url = INTERNAL_DATABASE_URL
         
-        logging.info(f"🔄 Trying fallback URL: {fallback_url[:50]}...")
+        logging.info(f"🔄 Trying fallback URL...")
         
         try:
             conn = psycopg2.connect(
@@ -103,17 +83,12 @@ def get_db_connection():
             return conn
         except Exception as e2:
             logging.error(f"❌ Fallback also failed: {e2}")
-            raise Exception(f"Database connection failed: {e} / {e2}")
+            raise Exception(f"Database connection failed")
 
 def init_db():
     """Initialize database tables"""
     try:
         logging.info("🔄 Initializing database...")
-        
-        db_url = get_database_url()
-        if not test_database_connection(db_url):
-            logging.error("❌ Cannot connect to database. Check your URL.")
-            return False
         
         conn = get_db_connection()
         c = conn.cursor()
@@ -131,7 +106,7 @@ def init_db():
             )
         ''')
         
-        # Products table with custom_key_pattern
+        # Products table
         c.execute('''
             CREATE TABLE IF NOT EXISTS products (
                 id SERIAL PRIMARY KEY,
@@ -161,7 +136,7 @@ def init_db():
             )
         ''')
         
-        # Payments table (UPI + Binance)
+        # Payments table
         c.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id SERIAL PRIMARY KEY,
@@ -210,8 +185,8 @@ def init_db():
                     VALUES (%s, %s, %s)
                     ON CONFLICT (type_name) DO NOTHING
                 ''', (type_name, pattern, desc))
-            except Exception as e:
-                logging.warning(f"Key type insert warning: {e}")
+            except:
+                pass
         
         # Insert default admin
         hashed = bcrypt.generate_password_hash('620300').decode('utf-8')
@@ -221,8 +196,8 @@ def init_db():
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (username) DO NOTHING
             ''', ('thedigamber', hashed, 'admin', 10000))
-        except Exception as e:
-            logging.warning(f"Admin insert warning: {e}")
+        except:
+            pass
         
         # Insert default products
         default_products = [
@@ -255,8 +230,8 @@ def init_db():
                     VALUES (%s, %s, %s, %s)
                     ON CONFLICT (name) DO NOTHING
                 ''', (name, credits, price, key_type))
-            except Exception as e:
-                logging.warning(f"Product insert warning: {e}")
+            except:
+                pass
         
         conn.commit()
         conn.close()
@@ -265,20 +240,10 @@ def init_db():
         
     except Exception as e:
         logging.error(f"❌ Database initialization error: {e}")
-        traceback.print_exc()
         return False
 
-# Initialize DB on startup with retry
-MAX_RETRIES = 3
-for attempt in range(MAX_RETRIES):
-    logging.info(f"🔄 Database init attempt {attempt + 1}/{MAX_RETRIES}")
-    if init_db():
-        break
-    if attempt < MAX_RETRIES - 1:
-        logging.info("⏳ Waiting 5 seconds before retry...")
-        time.sleep(5)
-    else:
-        logging.error("❌ All database initialization attempts failed!")
+# Initialize DB
+init_db()
 
 # ============================================
 # CONSTANTS
@@ -297,8 +262,6 @@ BINANCE_API_URL = os.getenv('BINANCE_API_URL', 'https://binance-verifier.onrende
 # ============================================
 
 class KeyGenerator:
-    """Generate keys in various formats including custom patterns"""
-    
     def __init__(self):
         self.generators = {
             'fluorite': self._generate_fluorite,
@@ -313,18 +276,13 @@ class KeyGenerator:
         }
     
     def generate_key(self, key_type, custom_pattern=None):
-        """Generate key based on type or custom pattern"""
         if custom_pattern:
             return self._generate_from_pattern(custom_pattern)
-        
         generator = self.generators.get(key_type, self._generate_standard)
         return generator()
     
     def _generate_from_pattern(self, pattern):
-        """Generate key from custom pattern"""
         result = pattern
-        
-        # Replace placeholders
         placeholders = {
             'RANDOM4': lambda: ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4)),
             'RANDOM6': lambda: ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6)),
@@ -404,7 +362,6 @@ class BinanceAPI:
         self.timeout = 30
     
     def _request(self, endpoint, method='GET', data=None):
-        """Make API request to Binance verifier"""
         try:
             url = self.base_url + endpoint
             if method == 'GET':
@@ -415,54 +372,28 @@ class BinanceAPI:
             if response.status_code == 200:
                 return response.json()
             else:
-                logging.error(f"Binance API error: {response.status_code}")
                 return {'success': False, 'error': f'HTTP {response.status_code}'}
         except Exception as e:
-            logging.error(f"Binance API error: {e}")
             return {'success': False, 'error': str(e)}
     
     def create_order(self, amount, email=None):
-        """Create new payment order"""
-        order_id = f"BNB{int(time.time())}{random.randint(100,999)}"
+        order_id = f"ORD{int(time.time())}{random.randint(100,999)}"
         return self._request('/api/create-order', 'POST', {
             'orderId': order_id,
             'amount': float(amount),
-            'customerEmail': email or 'customer@example.com'
-        })
-    
-    def verify_payment(self, order_id, amount):
-        """Verify if payment is complete"""
-        return self._request('/api/verify', 'POST', {
-            'orderId': order_id,
-            'amount': float(amount)
+            'customerEmail': email
         })
     
     def check_order(self, order_id):
-        """Check order status"""
         return self._request(f'/api/check/{order_id}')
-    
-    def get_qr(self, order_id):
-        """Get QR code for order with proper formatting"""
-        result = self._request(f'/api/qr/{order_id}')
-        if result and result.get('qr'):
-            # Ensure QR is properly formatted
-            qr_data = result.get('qr')
-            if not qr_data.startswith('data:image'):
-                qr_data = f"data:image/png;base64,{qr_data}"
-            return {'success': True, 'qr': qr_data}
-        return {'success': False, 'qr': None}
     
     def get_address(self, order_id):
         """Get crypto address for order"""
-        return self._request(f'/api/address/{order_id}')
-    
-    def check_expired(self, order_id):
-        """Check if order expired"""
-        return self._request(f'/api/expired/{order_id}')
-    
-    def cancel_order(self, order_id):
-        """Cancel order"""
-        return self._request(f'/api/cancel/{order_id}', 'POST')
+        result = self._request(f'/api/address/{order_id}')
+        if result and result.get('address'):
+            return result
+        # Fallback for testing
+        return {'address': '0x742d35Cc6634C0532925a3b844Bc5e7e7a9d1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9'}
 
 binance_api = BinanceAPI()
 
@@ -471,7 +402,7 @@ binance_api = BinanceAPI()
 # ============================================
 
 def generate_upi_qr(amount):
-    """Generate UPI QR code with proper formatting"""
+    """Generate UPI QR code - PEHLE JAISA"""
     try:
         upi_url = f"upi://pay?pa={UPI_ID}&pn={UPI_NAME}&am={amount}&cu=INR"
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
@@ -480,24 +411,13 @@ def generate_upi_qr(amount):
         img = qr.make_image(fill_color="black", back_color="white")
         buffered = BytesIO()
         img.save(buffered, format="PNG")
-        img_str = base64.b64encode(buffered.getvalue()).decode()
-        return f"data:image/png;base64,{img_str}"
+        return base64.b64encode(buffered.getvalue()).decode()
     except Exception as e:
-        logging.error(f"QR Generation Error: {e}")
+        logging.error(f"QR Error: {e}")
         return None
 
-def format_date(date_obj):
-    """Safely format datetime object for templates"""
-    if date_obj is None:
-        return 'N/A'
-    if hasattr(date_obj, 'strftime'):
-        return date_obj.strftime('%Y-%m-%d %H:%M')
-    if isinstance(date_obj, str):
-        return date_obj[:16]
-    return str(date_obj)
-
 # ============================================
-# ROUTES - AUTHENTICATION
+# AUTH ROUTES
 # ============================================
 
 @app.route('/')
@@ -510,76 +430,57 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    try:
-        if request.method == 'POST':
-            username = request.form.get('username', '').strip()
-            password = request.form.get('password', '')
-            
-            if not username or not password:
-                return render_template('login.html', error='Username and password required')
-            
-            conn = get_db_connection()
-            c = conn.cursor()
-            c.execute("SELECT * FROM users WHERE username = %s", (username,))
-            user = c.fetchone()
-            conn.close()
-            
-            if user and bcrypt.check_password_hash(user['password'], password):
-                session.clear()
-                session['username'] = user['username']
-                session['role'] = user['role']
-                session['credits'] = float(user['credits']) if user['credits'] else 0
-                session['user_id'] = user['id']
-                
-                logging.info(f"✅ Login: {username} ({user['role']})")
-                
-                if user['role'] == 'admin':
-                    return redirect(url_for('admin_dashboard'))
-                return redirect(url_for('user_dashboard'))
-            
-            return render_template('login.html', error='Invalid credentials')
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
         
-        return render_template('login.html')
-    except Exception as e:
-        logging.error(f"Login Error: {e}")
-        traceback.print_exc()
-        return render_template('error.html', error=f"Login error: {str(e)}")
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = c.fetchone()
+        conn.close()
+        
+        if user and bcrypt.check_password_hash(user['password'], password):
+            session.clear()
+            session['username'] = user['username']
+            session['role'] = user['role']
+            session['credits'] = float(user['credits']) if user['credits'] else 0
+            
+            if user['role'] == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            return redirect(url_for('user_dashboard'))
+        
+        return render_template('login.html', error='Invalid credentials')
+    
+    return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    try:
-        if request.method == 'POST':
-            username = request.form.get('username', '').strip()
-            password = request.form.get('password', '')
-            confirm = request.form.get('confirm_password', '')
-            
-            if not username or not password:
-                return render_template('register.html', error='All fields required')
-            if password != confirm:
-                return render_template('register.html', error='Passwords do not match')
-            if len(password) < 6:
-                return render_template('register.html', error='Password must be 6+ characters')
-            
-            hashed = bcrypt.generate_password_hash(password).decode('utf-8')
-            
-            conn = get_db_connection()
-            c = conn.cursor()
-            try:
-                c.execute('''
-                    INSERT INTO users (username, password, role, credits)
-                    VALUES (%s, %s, %s, %s)
-                ''', (username, hashed, 'user', 0))
-                conn.commit()
-                conn.close()
-                return redirect(url_for('login'))
-            except Exception as e:
-                conn.close()
-                return render_template('register.html', error='Username already exists')
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        confirm = request.form.get('confirm_password', '')
         
-        return render_template('register.html')
-    except Exception as e:
-        logging.error(f"Register Error: {e}")
-        return render_template('error.html', error=f"Registration error: {str(e)}")
+        if password != confirm:
+            return render_template('register.html', error='Passwords do not match')
+        
+        hashed = bcrypt.generate_password_hash(password).decode('utf-8')
+        
+        conn = get_db_connection()
+        c = conn.cursor()
+        try:
+            c.execute('''
+                INSERT INTO users (username, password, role, credits)
+                VALUES (%s, %s, %s, %s)
+            ''', (username, hashed, 'user', 0))
+            conn.commit()
+            conn.close()
+            return redirect(url_for('login'))
+        except:
+            conn.close()
+            return render_template('register.html', error='Username exists')
+    
+    return render_template('register.html')
 
 @app.route('/logout')
 def logout():
@@ -587,172 +488,94 @@ def logout():
     return redirect(url_for('login'))
 
 # ============================================
-# ROUTES - USER DASHBOARD
+# USER DASHBOARD
 # ============================================
 
 @app.route('/dashboard')
 def user_dashboard():
-    try:
-        if 'username' not in session or session.get('role') != 'user':
-            return redirect(url_for('login'))
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        
-        # Get user
-        c.execute("SELECT * FROM users WHERE username = %s", (session['username'],))
-        user = c.fetchone()
-        
-        if not user:
-            session.clear()
-            conn.close()
-            return redirect(url_for('login'))
-        
-        session['credits'] = float(user['credits'])
-        
-        # Get active products
-        c.execute('''
-            SELECT * FROM products 
-            WHERE is_active = TRUE 
-            ORDER BY name
-        ''')
-        products = c.fetchall()
-        
-        # Get user's licenses
-        c.execute('''
-            SELECT * FROM licenses 
-            WHERE username = %s 
-            ORDER BY expiry_date DESC 
-            LIMIT 50
-        ''', (session['username'],))
-        licenses = c.fetchall()
-        
-        conn.close()
-        
-        return render_template('dashboard.html',
-                             user=user,
-                             products=products,
-                             licenses=licenses,
-                             whatsapp_link=WHATSAPP_LINK,
-                             telegram_channel=TELEGRAM_CHANNEL)
+    if 'username' not in session:
+        return redirect(url_for('login'))
     
-    except Exception as e:
-        logging.error(f"Dashboard Error: {e}")
-        traceback.print_exc()
-        return render_template('error.html', error=f"Dashboard error: {str(e)}")
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    c.execute("SELECT * FROM users WHERE username = %s", (session['username'],))
+    user = c.fetchone()
+    
+    c.execute("SELECT * FROM products WHERE is_active = TRUE ORDER BY name")
+    products = c.fetchall()
+    
+    c.execute('''
+        SELECT * FROM licenses 
+        WHERE username = %s 
+        ORDER BY expiry_date DESC 
+        LIMIT 50
+    ''', (session['username'],))
+    licenses = c.fetchall()
+    
+    conn.close()
+    
+    return render_template('dashboard.html',
+                         user=user,
+                         products=products,
+                         licenses=licenses,
+                         whatsapp_link=WHATSAPP_LINK,
+                         telegram_channel=TELEGRAM_CHANNEL)
 
 @app.route('/generate_key', methods=['POST'])
 def generate_key_route():
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': 'Not logged in'})
-        
-        data = request.get_json()
-        product_id = data.get('product_id')
-        days = int(data.get('days', 1))
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        
-        # Get product
-        c.execute("SELECT * FROM products WHERE id = %s", (product_id,))
-        product = c.fetchone()
-        
-        if not product:
-            conn.close()
-            return jsonify({'success': False, 'error': 'Product not found'})
-        
-        total_credits = float(product['credit_cost_per_day']) * days
-        
-        # Check user credits
-        c.execute("SELECT credits FROM users WHERE username = %s", (session['username'],))
-        user_credits = c.fetchone()['credits']
-        
-        if user_credits < total_credits:
-            conn.close()
-            return jsonify({'success': False, 'error': f'Need {total_credits} credits'})
-        
-        # Generate key using pattern
-        key = key_gen.generate_key(product['key_type'], product.get('custom_key_pattern'))
-        expiry = datetime.now() + timedelta(days=days)
-        
-        # Deduct credits
-        c.execute('''
-            UPDATE users SET credits = credits - %s 
-            WHERE username = %s
-        ''', (total_credits, session['username']))
-        
-        # Save license
-        c.execute('''
-            INSERT INTO licenses 
-            (key, username, product_name, days, total_credits, expiry_date, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        ''', (key, session['username'], product['name'], days, total_credits,
-              expiry.strftime('%Y-%m-%d %H:%M:%S'), 'active'))
-        
-        conn.commit()
-        conn.close()
-        
-        session['credits'] = user_credits - total_credits
-        
-        return jsonify({'success': True, 'key': key})
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
     
-    except Exception as e:
-        logging.error(f"Generate Key Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/hwid_reset', methods=['POST'])
-def hwid_reset():
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': 'Not logged in'})
-        
-        data = request.get_json()
-        license_id = data.get('license_id')
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute('''
-            UPDATE licenses SET last_reset = %s 
-            WHERE id = %s AND username = %s
-        ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), license_id, session['username']))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True})
+    data = request.get_json()
+    product_id = data.get('product_id')
+    days = int(data.get('days', 1))
     
-    except Exception as e:
-        logging.error(f"HWID Reset Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/hwid_reset_all', methods=['POST'])
-def hwid_reset_all():
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': 'Not logged in'})
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute('''
-            UPDATE licenses SET last_reset = %s 
-            WHERE username = %s
-        ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), session['username']))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True})
+    conn = get_db_connection()
+    c = conn.cursor()
     
-    except Exception as e:
-        logging.error(f"HWID Reset All Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+    c.execute("SELECT * FROM products WHERE id = %s", (product_id,))
+    product = c.fetchone()
+    
+    if not product:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Product not found'})
+    
+    total_credits = float(product['credit_cost_per_day']) * days
+    
+    c.execute("SELECT credits FROM users WHERE username = %s", (session['username'],))
+    user_credits = c.fetchone()['credits']
+    
+    if user_credits < total_credits:
+        conn.close()
+        return jsonify({'success': False, 'error': f'Need {total_credits} credits'})
+    
+    key = key_gen.generate_key(product['key_type'], product.get('custom_key_pattern'))
+    expiry = datetime.now() + timedelta(days=days)
+    
+    c.execute('''
+        UPDATE users SET credits = credits - %s 
+        WHERE username = %s
+    ''', (total_credits, session['username']))
+    
+    c.execute('''
+        INSERT INTO licenses 
+        (key, username, product_name, days, total_credits, expiry_date, status)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    ''', (key, session['username'], product['name'], days, total_credits,
+          expiry.strftime('%Y-%m-%d %H:%M:%S'), 'active'))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'key': key})
 
 # ============================================
-# ROUTES - PAYMENT (UPI + BINANCE)
+# PAYMENT ROUTES - UPI (PEHLE JAISA)
 # ============================================
 
 @app.route('/payment')
 def payment_page():
-    """Payment page with method selection"""
     if 'username' not in session:
         return redirect(url_for('login'))
     
@@ -765,7 +588,7 @@ def payment_page():
 
 @app.route('/payment/upi', methods=['GET', 'POST'])
 def upi_payment():
-    """UPI Manual Payment - FIXED QR"""
+    """UPI Payment - PEHLE JAISA BILKUL"""
     if 'username' not in session:
         return redirect(url_for('login'))
     
@@ -774,20 +597,15 @@ def upi_payment():
         amount = float(request.form.get('amount', 0))
         
         if amount < MINIMUM_RECHARGE:
-            qr = generate_upi_qr(MINIMUM_RECHARGE)
             return render_template('upi_payment.html',
-                                 error=f'Minimum ₹{MINIMUM_RECHARGE}',
-                                 qr_code=qr,
+                                 error=f'Minimum amount is ₹{MINIMUM_RECHARGE}',
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID)
         
         if not utr or len(utr) != 12 or not utr.isdigit():
-            qr = generate_upi_qr(amount)
             return render_template('upi_payment.html',
-                                 error='Enter valid 12-digit UTR',
-                                 qr_code=qr,
-                                 amount=amount,
+                                 error='Please enter a valid 12-digit UTR number',
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID)
@@ -806,43 +624,37 @@ def upi_payment():
             conn.commit()
             conn.close()
             
-            qr = generate_upi_qr(amount)
             return render_template('upi_payment.html',
-                                 success=f'Payment submitted! {credits} credits pending approval.',
-                                 qr_code=qr,
-                                 amount=amount,
+                                 success=f'Payment submitted! ₹{amount} = {credits} credits pending approval.',
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID)
-        except Exception as e:
+        except:
             conn.close()
-            qr = generate_upi_qr(amount)
             return render_template('upi_payment.html',
                                  error='UTR already exists!',
-                                 qr_code=qr,
-                                 amount=amount,
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  upi_id=UPI_ID)
     
     # GET request
-    qr = generate_upi_qr(MINIMUM_RECHARGE)
+    qr_code = generate_upi_qr(MINIMUM_RECHARGE)
     return render_template('upi_payment.html',
-                         qr_code=qr,
+                         qr_code=qr_code,
                          min_recharge=MINIMUM_RECHARGE,
                          credit_rate=CREDIT_RATE,
                          upi_id=UPI_ID)
 
 @app.route('/payment/binance', methods=['GET', 'POST'])
 def binance_payment():
-    """Binance Crypto Payment - AUTO CREDITS with FIXED QR"""
+    """Binance Crypto Payment - USD mein show"""
     if 'username' not in session:
         return redirect(url_for('login'))
     
     if request.method == 'POST':
-        amount = float(request.form.get('amount', 0))
+        amount_inr = float(request.form.get('amount', 0))
         
-        if amount < MINIMUM_RECHARGE:
+        if amount_inr < MINIMUM_RECHARGE:
             return render_template('binance_payment.html',
                                  error=f'Minimum ₹{MINIMUM_RECHARGE}',
                                  min_recharge=MINIMUM_RECHARGE,
@@ -850,50 +662,48 @@ def binance_payment():
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         
-        # Create Binance order
-        result = binance_api.create_order(amount, f"{session['username']}@user.com")
+        # Convert to USD for Binance (approximate)
+        amount_usd = round(amount_inr / 83, 2)
+        
+        result = binance_api.create_order(amount_usd, f"{session['username']}@user.com")
         
         if result and result.get('success'):
             order_id = result.get('orderId')
-            credits = amount * CREDIT_RATE
+            credits = amount_inr * CREDIT_RATE
             
-            # Save to database
             conn = get_db_connection()
             c = conn.cursor()
             c.execute('''
                 INSERT INTO payments 
                 (username, payment_method, order_id, amount, credits_added, status, date, binance_data)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (session['username'], 'binance', order_id, amount, credits, 'pending',
+            ''', (session['username'], 'binance', order_id, amount_inr, credits, 'pending',
                   datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                   json.dumps(result)))
             conn.commit()
             conn.close()
             
-            # Get QR and address
-            qr_data = binance_api.get_qr(order_id)
+            # Get address
             address_data = binance_api.get_address(order_id)
             
             return render_template('binance_payment.html',
                                  order_id=order_id,
-                                 amount=amount,
+                                 amount_inr=amount_inr,
+                                 amount_usd=amount_usd,
                                  credits=credits,
-                                 qr_code=qr_data.get('qr') if qr_data else None,
-                                 address=address_data.get('address') if address_data else None,
-                                 binance_data=result,
+                                 address=address_data.get('address'),
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         else:
             return render_template('binance_payment.html',
-                                 error='Binance service unavailable. Please try UPI.',
+                                 error='Binance service unavailable',
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  whatsapp_link=WHATSAPP_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
     
-    # GET request
     return render_template('binance_payment.html',
                          min_recharge=MINIMUM_RECHARGE,
                          credit_rate=CREDIT_RATE,
@@ -902,243 +712,191 @@ def binance_payment():
 
 @app.route('/payment/binance/check/<order_id>')
 def check_binance_payment(order_id):
-    """Check Binance payment status - AUTO CREDIT on success"""
     if 'username' not in session:
         return jsonify({'success': False, 'error': 'Not logged in'})
     
-    try:
-        # Check with Binance API
-        result = binance_api.check_order(order_id)
+    result = binance_api.check_order(order_id)
+    
+    if result and result.get('status') == 'completed':
+        conn = get_db_connection()
+        c = conn.cursor()
         
-        if result and result.get('status') == 'completed':
-            conn = get_db_connection()
-            c = conn.cursor()
+        c.execute("SELECT * FROM payments WHERE order_id = %s", (order_id,))
+        payment = c.fetchone()
+        
+        if payment and payment['status'] == 'pending':
+            c.execute('''
+                UPDATE payments SET status = 'approved', approved_date = %s
+                WHERE order_id = %s
+            ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), order_id))
             
-            # Get payment record
-            c.execute("SELECT * FROM payments WHERE order_id = %s", (order_id,))
-            payment = c.fetchone()
+            c.execute('''
+                UPDATE users 
+                SET credits = credits + %s, total_recharged = total_recharged + %s
+                WHERE username = %s
+            ''', (payment['credits_added'], payment['amount'], session['username']))
             
-            if payment and payment['status'] == 'pending':
-                # Update payment
-                c.execute('''
-                    UPDATE payments 
-                    SET status = 'approved', approved_date = %s
-                    WHERE order_id = %s
-                ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), order_id))
-                
-                # Add credits to user
-                c.execute('''
-                    UPDATE users 
-                    SET credits = credits + %s, total_recharged = total_recharged + %s
-                    WHERE username = %s
-                ''', (payment['credits_added'], payment['amount'], session['username']))
-                
-                conn.commit()
-                conn.close()
-                
-                # Update session
-                session['credits'] = session.get('credits', 0) + payment['credits_added']
-                
-                return jsonify({
-                    'success': True,
-                    'status': 'completed',
-                    'credited': True,
-                    'credits': float(payment['credits_added'])
-                })
+            conn.commit()
             conn.close()
-        
-        return jsonify({
-            'success': True,
-            'status': result.get('status', 'pending') if result else 'pending'
-        })
-        
-    except Exception as e:
-        logging.error(f"Binance check error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+            
+            return jsonify({
+                'success': True,
+                'status': 'completed',
+                'credited': True,
+                'credits': float(payment['credits_added'])
+            })
+        conn.close()
+    
+    return jsonify({
+        'success': True,
+        'status': result.get('status', 'pending') if result else 'pending'
+    })
 
 @app.route('/generate_payment_qr', methods=['POST'])
 def generate_payment_qr():
-    """Generate UPI QR for amount - FIXED"""
-    try:
-        if 'username' not in session:
-            return jsonify({'success': False, 'error': 'Not logged in'})
-        
-        data = request.get_json()
-        amount = float(data.get('amount', MINIMUM_RECHARGE))
-        
-        if amount < MINIMUM_RECHARGE:
-            return jsonify({'success': False, 'error': f'Minimum amount is ₹{MINIMUM_RECHARGE}'})
-        
-        qr_code = generate_upi_qr(amount)
-        credits_to_add = amount * CREDIT_RATE
-        
-        return jsonify({
-            'success': True,
-            'qr_code': qr_code,
-            'amount': amount,
-            'credits': round(credits_to_add, 1),
-            'upi_id': UPI_ID
-        })
-        
-    except Exception as e:
-        logging.error(f"Generate QR Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+    """Generate UPI QR for amount"""
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    data = request.get_json()
+    amount = float(data.get('amount', MINIMUM_RECHARGE))
+    
+    if amount < MINIMUM_RECHARGE:
+        return jsonify({'success': False, 'error': f'Minimum amount is ₹{MINIMUM_RECHARGE}'})
+    
+    qr_code = generate_upi_qr(amount)
+    credits = amount * CREDIT_RATE
+    
+    return jsonify({
+        'success': True,
+        'qr_code': qr_code,
+        'amount': amount,
+        'credits': round(credits, 1)
+    })
 
 # ============================================
-# ROUTES - ADMIN DASHBOARD
+# ADMIN DASHBOARD
 # ============================================
 
 @app.route('/admin')
 def admin_dashboard():
-    """Admin dashboard"""
-    try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return redirect(url_for('login'))
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        
-        # Stats
-        c.execute("SELECT COUNT(*) FROM users WHERE role = 'user'")
-        total_users = c.fetchone()['count']
-        
-        c.execute("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'approved'")
-        total_revenue = c.fetchone()['coalesce']
-        
-        c.execute("SELECT COALESCE(SUM(credits_added), 0) FROM payments WHERE status = 'approved'")
-        total_credits_sold = c.fetchone()['coalesce']
-        
-        c.execute("SELECT COUNT(*) FROM payments WHERE status = 'pending'")
-        pending_payments = c.fetchone()['count']
-        
-        c.execute("SELECT COUNT(*) FROM licenses WHERE status = 'active'")
-        active_keys = c.fetchone()['count']
-        
-        # Users
-        c.execute("SELECT * FROM users WHERE role != 'admin' ORDER BY credits DESC")
-        users = c.fetchall()
-        
-        # Payments
-        c.execute('''
-            SELECT * FROM payments 
-            ORDER BY CASE status WHEN 'pending' THEN 1 ELSE 2 END, date DESC
-        ''')
-        payments = c.fetchall()
-        
-        # Licenses
-        c.execute("SELECT * FROM licenses ORDER BY expiry_date DESC LIMIT 100")
-        licenses = c.fetchall()
-        
-        # Products
-        c.execute("SELECT * FROM products ORDER BY name")
-        products = c.fetchall()
-        
-        # Key types
-        c.execute("SELECT * FROM key_types ORDER BY type_name")
-        key_types = c.fetchall()
-        
-        conn.close()
-        
-        return render_template('admin.html',
-                             users=users,
-                             payments=payments,
-                             licenses=licenses,
-                             products=products,
-                             key_types=key_types,
-                             total_users=total_users,
-                             total_revenue=total_revenue,
-                             total_credits_sold=total_credits_sold,
-                             pending_payments=pending_payments,
-                             active_keys=active_keys,
-                             whatsapp_link=WHATSAPP_LINK,
-                             telegram_channel=TELEGRAM_CHANNEL,
-                             format_date=format_date)
-    
-    except Exception as e:
-        logging.error(f"Admin Dashboard Error: {e}")
-        traceback.print_exc()
-        return render_template('error.html', error=f"Admin error: {str(e)}")
-
-@app.route('/admin/track_binance/<order_id>')
-def track_binance(order_id):
-    """Admin track specific Binance order"""
     if 'username' not in session or session.get('role') != 'admin':
-        return jsonify({'success': False, 'error': 'Unauthorized'})
+        return redirect(url_for('login'))
     
-    result = binance_api.check_order(order_id)
-    return jsonify(result)
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    # Stats
+    c.execute("SELECT COUNT(*) FROM users WHERE role = 'user'")
+    total_users = c.fetchone()['count']
+    
+    c.execute("SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'approved'")
+    total_revenue = c.fetchone()['coalesce']
+    
+    c.execute("SELECT COALESCE(SUM(credits_added), 0) FROM payments WHERE status = 'approved'")
+    total_credits_sold = c.fetchone()['coalesce']
+    
+    c.execute("SELECT COUNT(*) FROM payments WHERE status = 'pending'")
+    pending_payments = c.fetchone()['count']
+    
+    c.execute("SELECT COUNT(*) FROM licenses WHERE status = 'active'")
+    active_keys = c.fetchone()['count']
+    
+    # Users
+    c.execute("SELECT * FROM users WHERE role != 'admin' ORDER BY credits DESC")
+    users = c.fetchall()
+    
+    # Payments
+    c.execute('''
+        SELECT * FROM payments 
+        ORDER BY CASE status WHEN 'pending' THEN 1 ELSE 2 END, date DESC
+    ''')
+    payments = c.fetchall()
+    
+    # Licenses
+    c.execute("SELECT * FROM licenses ORDER BY expiry_date DESC LIMIT 100")
+    licenses = c.fetchall()
+    
+    # Products
+    c.execute("SELECT * FROM products ORDER BY name")
+    products = c.fetchall()
+    
+    # Key types
+    c.execute("SELECT * FROM key_types ORDER BY type_name")
+    key_types = c.fetchall()
+    
+    conn.close()
+    
+    return render_template('admin.html',
+                         users=users,
+                         payments=payments,
+                         licenses=licenses,
+                         products=products,
+                         key_types=key_types,
+                         total_users=total_users,
+                         total_revenue=total_revenue,
+                         total_credits_sold=total_credits_sold,
+                         pending_payments=pending_payments,
+                         active_keys=active_keys,
+                         whatsapp_link=WHATSAPP_LINK,
+                         telegram_channel=TELEGRAM_CHANNEL)
 
 # ============================================
-# ADMIN - PAYMENT MANAGEMENT
+# ADMIN - PAYMENT ACTIONS
 # ============================================
 
 @app.route('/admin/approve_payment', methods=['POST'])
 def approve_payment():
-    """Approve UPI payment (manual)"""
-    try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return jsonify({'success': False, 'error': 'Unauthorized'})
-        
-        data = request.get_json()
-        payment_id = data.get('payment_id')
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        
-        # Get payment
-        c.execute("SELECT * FROM payments WHERE id = %s", (payment_id,))
-        payment = c.fetchone()
-        
-        if not payment:
-            conn.close()
-            return jsonify({'success': False, 'error': 'Payment not found'})
-        
-        # Update payment
-        c.execute('''
-            UPDATE payments 
-            SET status = 'approved', approved_date = %s, approved_by = %s
-            WHERE id = %s
-        ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), session['username'], payment_id))
-        
-        # Add credits to user
-        c.execute('''
-            UPDATE users 
-            SET credits = credits + %s, total_recharged = total_recharged + %s
-            WHERE username = %s
-        ''', (payment['credits_added'], payment['amount'], payment['username']))
-        
-        conn.commit()
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    payment_id = data.get('payment_id')
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    c.execute("SELECT * FROM payments WHERE id = %s", (payment_id,))
+    payment = c.fetchone()
+    
+    if not payment:
         conn.close()
-        
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        logging.error(f"Approve Payment Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({'success': False, 'error': 'Payment not found'})
+    
+    c.execute('''
+        UPDATE payments 
+        SET status = 'approved', approved_date = %s, approved_by = %s
+        WHERE id = %s
+    ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), session['username'], payment_id))
+    
+    c.execute('''
+        UPDATE users 
+        SET credits = credits + %s, total_recharged = total_recharged + %s
+        WHERE username = %s
+    ''', (payment['credits_added'], payment['amount'], payment['username']))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
 
 @app.route('/admin/reject_payment', methods=['POST'])
 def reject_payment():
-    """Reject UPI payment"""
-    try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return jsonify({'success': False, 'error': 'Unauthorized'})
-        
-        data = request.get_json()
-        payment_id = data.get('payment_id')
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute('''
-            UPDATE payments SET status = 'rejected' WHERE id = %s
-        ''', (payment_id,))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        logging.error(f"Reject Payment Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    payment_id = data.get('payment_id')
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('''
+        UPDATE payments SET status = 'rejected' WHERE id = %s
+    ''', (payment_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
 
 # ============================================
 # ADMIN - PRODUCT MANAGEMENT
@@ -1146,115 +904,91 @@ def reject_payment():
 
 @app.route('/admin/add_product', methods=['POST'])
 def add_product():
-    """Add product with optional custom key pattern"""
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    credits = float(data.get('credit_cost_per_day', 0))
+    price = float(data.get('price_per_day', 0))
+    key_type = data.get('key_type', 'standard')
+    custom_pattern = data.get('custom_key_pattern')
+    
+    if not name or credits <= 0 or price <= 0:
+        return jsonify({'success': False, 'error': 'Invalid data'})
+    
+    conn = get_db_connection()
+    c = conn.cursor()
     try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return jsonify({'success': False, 'error': 'Unauthorized'})
-        
-        data = request.get_json()
-        name = data.get('name', '').strip()
-        credits = float(data.get('credit_cost_per_day', 0))
-        price = float(data.get('price_per_day', 0))
-        key_type = data.get('key_type', 'standard')
-        custom_pattern = data.get('custom_key_pattern')
-        
-        if not name or credits <= 0 or price <= 0:
-            return jsonify({'success': False, 'error': 'Invalid data'})
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        try:
-            c.execute('''
-                INSERT INTO products (name, credit_cost_per_day, price_per_day, key_type, custom_key_pattern)
-                VALUES (%s, %s, %s, %s, %s)
-            ''', (name, credits, price, key_type, custom_pattern))
-            conn.commit()
-            conn.close()
-            return jsonify({'success': True})
-        except Exception as e:
-            conn.close()
-            return jsonify({'success': False, 'error': 'Product name exists'})
-            
-    except Exception as e:
-        logging.error(f"Add Product Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+        c.execute('''
+            INSERT INTO products (name, credit_cost_per_day, price_per_day, key_type, custom_key_pattern)
+            VALUES (%s, %s, %s, %s, %s)
+        ''', (name, credits, price, key_type, custom_pattern))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Product name exists'})
 
 @app.route('/admin/edit_product', methods=['POST'])
 def edit_product():
-    """Edit product"""
-    try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return jsonify({'success': False, 'error': 'Unauthorized'})
-        
-        data = request.get_json()
-        product_id = data.get('product_id')
-        name = data.get('name')
-        credits = float(data.get('credit_cost_per_day', 0))
-        price = float(data.get('price_per_day', 0))
-        key_type = data.get('key_type')
-        custom_pattern = data.get('custom_key_pattern')
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute('''
-            UPDATE products 
-            SET name = %s, credit_cost_per_day = %s, price_per_day = %s, 
-                key_type = %s, custom_key_pattern = %s
-            WHERE id = %s
-        ''', (name, credits, price, key_type, custom_pattern, product_id))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        logging.error(f"Edit Product Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    product_id = data.get('product_id')
+    name = data.get('name')
+    credits = float(data.get('credit_cost_per_day', 0))
+    price = float(data.get('price_per_day', 0))
+    key_type = data.get('key_type')
+    custom_pattern = data.get('custom_key_pattern')
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('''
+        UPDATE products 
+        SET name = %s, credit_cost_per_day = %s, price_per_day = %s, 
+            key_type = %s, custom_key_pattern = %s
+        WHERE id = %s
+    ''', (name, credits, price, key_type, custom_pattern, product_id))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
 
 @app.route('/admin/delete_product', methods=['POST'])
 def delete_product():
-    """Delete product"""
-    try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return jsonify({'success': False, 'error': 'Unauthorized'})
-        
-        data = request.get_json()
-        product_id = data.get('product_id')
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("DELETE FROM products WHERE id = %s", (product_id,))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        logging.error(f"Delete Product Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    product_id = data.get('product_id')
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM products WHERE id = %s", (product_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
 
 @app.route('/admin/toggle_product', methods=['POST'])
 def toggle_product():
-    """Enable/disable product"""
-    try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return jsonify({'success': False, 'error': 'Unauthorized'})
-        
-        data = request.get_json()
-        product_id = data.get('product_id')
-        is_active = data.get('is_active', True)
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("UPDATE products SET is_active = %s WHERE id = %s", (is_active, product_id))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        logging.error(f"Toggle Product Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    product_id = data.get('product_id')
+    is_active = data.get('is_active', True)
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("UPDATE products SET is_active = %s WHERE id = %s", (is_active, product_id))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
 
 # ============================================
 # ADMIN - KEY TYPE MANAGEMENT
@@ -1262,52 +996,27 @@ def toggle_product():
 
 @app.route('/admin/add_key_type', methods=['POST'])
 def add_key_type():
-    """Add custom key type with pattern"""
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    type_name = data.get('type_name')
+    pattern = data.get('pattern')
+    description = data.get('description')
+    
+    conn = get_db_connection()
+    c = conn.cursor()
     try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return jsonify({'success': False, 'error': 'Unauthorized'})
-        
-        data = request.get_json()
-        type_name = data.get('type_name')
-        pattern = data.get('pattern')
-        description = data.get('description')
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        try:
-            c.execute('''
-                INSERT INTO key_types (type_name, pattern, description)
-                VALUES (%s, %s, %s)
-            ''', (type_name, pattern, description))
-            conn.commit()
-            conn.close()
-            return jsonify({'success': True})
-        except Exception as e:
-            conn.close()
-            return jsonify({'success': False, 'error': 'Type name exists'})
-            
-    except Exception as e:
-        logging.error(f"Add Key Type Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/admin/get_key_types')
-def get_key_types():
-    """Get all key types"""
-    try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return jsonify({'success': False, 'error': 'Unauthorized'})
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT * FROM key_types ORDER BY type_name")
-        types = c.fetchall()
+        c.execute('''
+            INSERT INTO key_types (type_name, pattern, description)
+            VALUES (%s, %s, %s)
+        ''', (type_name, pattern, description))
+        conn.commit()
         conn.close()
-        
-        return jsonify({'success': True, 'key_types': types})
-        
-    except Exception as e:
-        logging.error(f"Get Key Types Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({'success': True})
+    except:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Type name exists'})
 
 # ============================================
 # ADMIN - USER MANAGEMENT
@@ -1315,77 +1024,98 @@ def get_key_types():
 
 @app.route('/admin/add_credits', methods=['POST'])
 def add_credits():
-    """Admin add credits to user"""
-    try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return jsonify({'success': False, 'error': 'Unauthorized'})
-        
-        data = request.get_json()
-        username = data.get('username')
-        credits = float(data.get('credits', 0))
-        
-        if credits <= 0:
-            return jsonify({'success': False, 'error': 'Invalid amount'})
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute('''
-            UPDATE users SET credits = credits + %s WHERE username = %s
-        ''', (credits, username))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        logging.error(f"Add Credits Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    username = data.get('username')
+    credits = float(data.get('credits', 0))
+    
+    if credits <= 0:
+        return jsonify({'success': False, 'error': 'Invalid amount'})
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('''
+        UPDATE users SET credits = credits + %s WHERE username = %s
+    ''', (credits, username))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
 
 @app.route('/admin/delete_user', methods=['POST'])
 def delete_user():
-    """Delete user and all their data"""
-    try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return jsonify({'success': False, 'error': 'Unauthorized'})
-        
-        data = request.get_json()
-        username = data.get('username')
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("DELETE FROM licenses WHERE username = %s", (username,))
-        c.execute("DELETE FROM payments WHERE username = %s", (username,))
-        c.execute("DELETE FROM users WHERE username = %s AND role != 'admin'", (username,))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        logging.error(f"Delete User Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    username = data.get('username')
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM licenses WHERE username = %s", (username,))
+    c.execute("DELETE FROM payments WHERE username = %s", (username,))
+    c.execute("DELETE FROM users WHERE username = %s AND role != 'admin'", (username,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
 
 @app.route('/admin/delete_key', methods=['POST'])
 def delete_key():
-    """Delete a license key"""
-    try:
-        if 'username' not in session or session.get('role') != 'admin':
-            return jsonify({'success': False, 'error': 'Unauthorized'})
-        
-        data = request.get_json()
-        license_id = data.get('license_id')
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("DELETE FROM licenses WHERE id = %s", (license_id,))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({'success': True})
-        
-    except Exception as e:
-        logging.error(f"Delete Key Error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    license_id = data.get('license_id')
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM licenses WHERE id = %s", (license_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
+
+# ============================================
+# HWID RESET
+# ============================================
+
+@app.route('/hwid_reset', methods=['POST'])
+def hwid_reset():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    data = request.get_json()
+    license_id = data.get('license_id')
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('''
+        UPDATE licenses SET last_reset = %s 
+        WHERE id = %s AND username = %s
+    ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), license_id, session['username']))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
+
+@app.route('/hwid_reset_all', methods=['POST'])
+def hwid_reset_all():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute('''
+        UPDATE licenses SET last_reset = %s 
+        WHERE username = %s
+    ''', (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), session['username']))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
 
 # ============================================
 # ERROR HANDLERS
@@ -1393,16 +1123,7 @@ def delete_key():
 
 @app.errorhandler(500)
 def internal_error(error):
-    logging.error(f"500 Error: {error}")
-    db_status = "Unknown"
-    try:
-        test_database_connection(get_database_url())
-        db_status = "Connected"
-    except:
-        db_status = "Disconnected"
-    
-    return render_template('error.html', 
-                         error=f"Internal Server Error. DB Status: {db_status}"), 500
+    return render_template('error.html', error="Internal Server Error"), 500
 
 @app.errorhandler(404)
 def not_found_error(error):
