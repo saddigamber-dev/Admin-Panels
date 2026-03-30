@@ -303,14 +303,18 @@ def add_missing_columns():
 add_missing_columns()
 
 # ============================================
-# CONSTANTS
+# CONSTANTS - UPDATED (WhatsApp Removed, Telegram Support Added)
 # ============================================
 
 CREDIT_RATE = float(os.getenv('CREDIT_RATE', 0.5))
 MINIMUM_RECHARGE = int(os.getenv('MIN_RECHARGE', 1000))
 UPI_ID = os.getenv('UPI_ID', 'prabhu84@ptaxis')
 UPI_NAME = os.getenv('UPI_NAME', 'Digamber Raj')
-WHATSAPP_LINK = os.getenv('WHATSAPP_LINK', 'https://wa.me/message/IGTHSKO23KP4H1')
+
+# ============================================
+# SUPPORT LINKS - UPDATED
+# ============================================
+TELEGRAM_SUPPORT_LINK = os.getenv('TELEGRAM_SUPPORT_LINK', 'https://t.me/SMGrowMarthqofc')
 TELEGRAM_CHANNEL = os.getenv('TELEGRAM_CHANNEL', 'https://t.me/growmarthq')
 USD_TO_INR = 98
 BINANCE_ADDRESS = '1143351874'
@@ -834,7 +838,7 @@ def logout():
     return redirect(url_for('login'))
 
 # ============================================
-# USER DASHBOARD
+# USER DASHBOARD - UPDATED WITH TELEGRAM SUPPORT
 # ============================================
 
 @app.route('/dashboard')
@@ -882,7 +886,7 @@ def user_dashboard():
                          licenses=licenses,
                          payments=payments,
                          format_datetime=format_datetime,
-                         whatsapp_link=WHATSAPP_LINK,
+                         telegram_support=TELEGRAM_SUPPORT_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
 # ============================================
@@ -951,7 +955,7 @@ def generate_key_route():
     })
 
 # ============================================
-# PAYMENT ROUTES
+# PAYMENT ROUTES - UPDATED WITH TELEGRAM SUPPORT
 # ============================================
 
 @app.route('/payment')
@@ -965,7 +969,7 @@ def payment_page():
                          upi_id=UPI_ID,
                          usd_to_inr=USD_TO_INR,
                          binance_address=BINANCE_ADDRESS,
-                         whatsapp_link=WHATSAPP_LINK,
+                         telegram_support=TELEGRAM_SUPPORT_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
 @app.route('/payment/upi', methods=['GET', 'POST'])
@@ -987,7 +991,7 @@ def upi_payment():
                                  upi_id=UPI_ID,
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
-                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         
         if not utr or len(utr) != 12 or not utr.isdigit():
@@ -1001,7 +1005,7 @@ def upi_payment():
                                  upi_id=UPI_ID,
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
-                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         
         credits = amount * CREDIT_RATE
@@ -1028,7 +1032,7 @@ def upi_payment():
                                  upi_id=UPI_ID,
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
-                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         except:
             conn.close()
@@ -1042,7 +1046,7 @@ def upi_payment():
                                  upi_id=UPI_ID,
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
-                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
     
     qr_code = generate_upi_qr(MINIMUM_RECHARGE)
@@ -1054,7 +1058,7 @@ def upi_payment():
                          upi_id=UPI_ID,
                          usd_to_inr=USD_TO_INR,
                          binance_address=BINANCE_ADDRESS,
-                         whatsapp_link=WHATSAPP_LINK,
+                         telegram_support=TELEGRAM_SUPPORT_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
 @app.route('/payment/binance', methods=['GET', 'POST'])
@@ -1072,7 +1076,7 @@ def binance_payment():
                                  credit_rate=CREDIT_RATE,
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
-                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         
         amount_usd = round(amount_inr / USD_TO_INR, 2)
@@ -1106,7 +1110,7 @@ def binance_payment():
                                  min_recharge=MINIMUM_RECHARGE,
                                  credit_rate=CREDIT_RATE,
                                  usd_to_inr=USD_TO_INR,
-                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
         else:
             return render_template('binance_payment.html',
@@ -1115,7 +1119,7 @@ def binance_payment():
                                  credit_rate=CREDIT_RATE,
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
-                                 whatsapp_link=WHATSAPP_LINK,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK,
                                  telegram_channel=TELEGRAM_CHANNEL)
     
     return render_template('binance_payment.html',
@@ -1123,7 +1127,7 @@ def binance_payment():
                          credit_rate=CREDIT_RATE,
                          usd_to_inr=USD_TO_INR,
                          binance_address=BINANCE_ADDRESS,
-                         whatsapp_link=WHATSAPP_LINK,
+                         telegram_support=TELEGRAM_SUPPORT_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
 @app.route('/payment/binance/check/<order_id>')
@@ -1197,7 +1201,7 @@ def generate_payment_qr():
     })
 
 # ============================================
-# ADMIN DASHBOARD
+# ADMIN DASHBOARD - UPDATED WITH TELEGRAM SUPPORT
 # ============================================
 
 @app.route('/admin')
@@ -1262,7 +1266,7 @@ def admin_dashboard():
                          active_keys=active_keys,
                          format_datetime=format_datetime,
                          binance_address=BINANCE_ADDRESS,
-                         whatsapp_link=WHATSAPP_LINK,
+                         telegram_support=TELEGRAM_SUPPORT_LINK,
                          telegram_channel=TELEGRAM_CHANNEL)
 
 # ============================================
