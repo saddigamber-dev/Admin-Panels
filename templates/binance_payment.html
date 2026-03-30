@@ -41,14 +41,14 @@
                     <p style="margin: 0.5rem 0;">Credits: <strong class="neon-text-green">{{ credits }}</strong></p>
                 </div>
                 
-                <!-- BINANCE ADDRESS - FIXED WITH REAL ADDRESS -->
+                <!-- BINANCE ADDRESS -->
                 <div style="text-align: center; margin: 2rem 0; padding: 2rem; background: rgba(0,0,0,0.5); border-radius: 20px; border: 2px solid var(--accent-green);">
                     <i class="fas fa-wallet" style="font-size: 3rem; color: var(--accent-green); margin-bottom: 1rem;"></i>
                     <h3 style="color: var(--accent-green);">Send to this Binance ID</h3>
                     <div style="background: rgba(0,0,0,0.7); padding: 1.5rem; border-radius: 15px; margin: 1rem 0; border: 1px solid var(--accent-pink);">
-                        <code style="font-size: 1.5rem; color: var(--accent-green); font-weight: bold;">1143351874</code>
+                        <code style="font-size: 1.5rem; color: var(--accent-green); font-weight: bold;">{{ binance_address }}</code>
                     </div>
-                    <button class="btn-primary" style="width: auto; padding: 1rem 3rem; background: var(--accent-green); color: black;" onclick="copyAddress('1143351874')">
+                    <button class="btn-primary" style="width: auto; padding: 1rem 3rem; background: var(--accent-green); color: black;" onclick="copyAddress('{{ binance_address }}')">
                         <i class="fas fa-copy"></i> COPY BINANCE ID
                     </button>
                     <p style="margin-top: 1rem; color: var(--text-secondary);">Send exactly <strong>${{ amount_usd }}</strong> worth of crypto to this Binance ID</p>
@@ -78,13 +78,13 @@
                 <script>
                 let checkCount = 0;
                 let checkInterval;
-                let expiryTime = Date.now() + (10 * 60 * 1000); // 10 minutes
+                let expiryTime = Date.now() + (10 * 60 * 1000);
                 
                 function copyAddress(address) {
                     navigator.clipboard.writeText(address).then(function() {
-                        alert('✅ Binance ID 1143351874 copied to clipboard!');
+                        alert('✅ Binance ID copied to clipboard!');
                     }, function() {
-                        alert('❌ Failed to copy. Please copy manually: 1143351874');
+                        alert('❌ Failed to copy. Please copy manually: ' + address);
                     });
                 }
                 
@@ -93,7 +93,6 @@
                     let progress = Math.min(checkCount * 5, 90);
                     document.getElementById('progress-bar').style.width = progress + '%';
                     
-                    // Check if expired
                     if (Date.now() > expiryTime) {
                         document.getElementById('payment-status').innerHTML = `
                             <div class="error-message">
@@ -118,50 +117,29 @@
                     fetch('/payment/binance/check/{{ order_id }}')
                         .then(response => response.json())
                         .then(data => {
-                            if (data.success) {
-                                if (data.status === 'completed') {
-                                    clearInterval(checkInterval);
-                                    document.getElementById('payment-status').innerHTML = `
-                                        <div class="success-message">
-                                            <i class="fas fa-check-circle" style="font-size: 4rem;"></i>
-                                            <h2>✅ PAYMENT RECEIVED!</h2>
-                                            <p style="font-size: 1.5rem;">${data.credits} Credits Added!</p>
-                                            <a href="{{ url_for('user_dashboard') }}" class="btn-primary" style="width: auto; padding: 1rem 3rem;">
-                                                <i class="fas fa-tachometer-alt"></i> Go to Dashboard
-                                            </a>
-                                        </div>
-                                    `;
-                                } else {
-                                    updateProgress();
-                                }
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Check error:', error);
-                        });
-                }
-                
-                // Start checking every 5 seconds
-                checkInterval = setInterval(checkPayment, 5000);
-                setTimeout(checkPayment, 2000);
-                
-                // Auto-delete after 10 minutes
-                setTimeout(function() {
-                    fetch('/payment/binance/cleanup/{{ order_id }}', { method: 'POST' })
-                        .then(() => {
-                            if (document.getElementById('payment-status')) {
+                            if (data.success && data.status === 'completed') {
+                                clearInterval(checkInterval);
                                 document.getElementById('payment-status').innerHTML = `
-                                    <div class="error-message">
-                                        <i class="fas fa-clock"></i>
-                                        <h3>⏰ PAYMENT EXPIRED</h3>
-                                        <p>Order automatically deleted after 10 minutes.</p>
-                                        <a href="{{ url_for('binance_payment') }}" class="btn-primary" style="margin-top: 1rem;">
-                                            <i class="fas fa-redo"></i> Create New Order
+                                    <div class="success-message">
+                                        <i class="fas fa-check-circle" style="font-size: 4rem;"></i>
+                                        <h2>✅ PAYMENT RECEIVED!</h2>
+                                        <p style="font-size: 1.5rem;">${data.credits} Credits Added!</p>
+                                        <a href="{{ url_for('user_dashboard') }}" class="btn-primary" style="width: auto; padding: 1rem 3rem;">
+                                            <i class="fas fa-tachometer-alt"></i> Go to Dashboard
                                         </a>
                                     </div>
                                 `;
+                            } else {
+                                updateProgress();
                             }
                         });
+                }
+                
+                checkInterval = setInterval(checkPayment, 5000);
+                setTimeout(checkPayment, 2000);
+                
+                setTimeout(function() {
+                    fetch('/payment/binance/cleanup/{{ order_id }}', { method: 'POST' });
                 }, 10 * 60 * 1000);
                 </script>
                 
@@ -173,13 +151,11 @@
                         <input type="number" name="amount" min="{{ min_recharge }}" step="1" required placeholder="Enter amount in INR" id="amount-input" oninput="updateUSD(this.value)">
                     </div>
                     
-                    <!-- USD Preview -->
                     <div style="background: rgba(240,185,11,0.1); padding: 1.5rem; border-radius: 15px; margin-bottom: 1.5rem; text-align: center; border: 1px solid var(--binance-color);">
                         <p style="font-size: 1.3rem;">≈ <strong class="neon-text-green" id="usd-preview">$0.00</strong> USD</p>
                         <p style="font-size: 0.9rem; color: var(--text-secondary);">Rate: 1 USD = {{ usd_to_inr }} INR</p>
                     </div>
                     
-                    <!-- Quick Amount Buttons -->
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0;">
                         <button type="button" class="btn-secondary" onclick="setAmount(1000)">₹1000 (${{ (1000/usd_to_inr)|round(2) }})</button>
                         <button type="button" class="btn-secondary" onclick="setAmount(2000)">₹2000 (${{ (2000/usd_to_inr)|round(2) }})</button>
@@ -187,15 +163,13 @@
                         <button type="button" class="btn-secondary" onclick="setAmount(10000)">₹10000 (${{ (10000/usd_to_inr)|round(2) }})</button>
                     </div>
                     
-                    <!-- Credits Preview -->
                     <div style="background: rgba(0,255,0,0.1); padding: 1.5rem; border-radius: 15px; margin-bottom: 1.5rem; text-align: center;">
                         <p>You will get: <strong class="neon-text-green" id="credit-preview">0</strong> Credits</p>
                     </div>
                     
-                    <!-- Binance ID Display -->
                     <div style="text-align: center; margin-bottom: 1.5rem; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 10px;">
                         <p style="color: var(--text-secondary);">Send payments to Binance ID:</p>
-                        <p style="font-size: 1.8rem; color: var(--accent-green); font-weight: bold;">1143351874</p>
+                        <p style="font-size: 1.8rem; color: var(--accent-green); font-weight: bold;">{{ binance_address }}</p>
                     </div>
                     
                     <button type="submit" class="btn-primary" style="background: linear-gradient(145deg, #f0b90b, #d4a00a);">
@@ -235,13 +209,13 @@
                 </script>
                 {% endif %}
                 
-                <!-- Support Section -->
+                <!-- Support Section - UPDATED (Telegram Support + Telegram Channel) -->
                 <div class="support-section" style="margin-top: 2rem;">
                     <h3><i class="fas fa-headset"></i> Need Help?</h3>
                     <div class="support-grid">
-                        <a href="{{ whatsapp_link }}" target="_blank" class="support-card whatsapp">
-                            <i class="fab fa-whatsapp"></i>
-                            <span>WhatsApp Support</span>
+                        <a href="{{ telegram_support }}" target="_blank" class="support-card telegram">
+                            <i class="fab fa-telegram"></i>
+                            <span>Telegram Support</span>
                             <small>Click to chat</small>
                         </a>
                         <a href="{{ telegram_channel }}" target="_blank" class="support-card telegram">
