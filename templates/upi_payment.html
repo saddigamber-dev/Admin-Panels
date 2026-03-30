@@ -42,8 +42,8 @@
                         <a href="{{ url_for('user_dashboard') }}" class="btn-primary" style="width: auto; padding: 0.8rem 2rem;">
                             <i class="fas fa-tachometer-alt"></i> Go to Dashboard
                         </a>
-                        <a href="{{ whatsapp_link }}" target="_blank" class="btn-whatsapp" style="width: auto; padding: 0.8rem 2rem;">
-                            <i class="fab fa-whatsapp"></i> WhatsApp
+                        <a href="{{ telegram_support }}" target="_blank" class="btn-telegram" style="width: auto; padding: 0.8rem 2rem;">
+                            <i class="fab fa-telegram"></i> Telegram Support
                         </a>
                     </div>
                 </div>
@@ -58,7 +58,7 @@
                 {% endif %}
                 
                 {% if not success %}
-                <!-- DYNAMIC QR CODE - Updates based on amount -->
+                <!-- DYNAMIC QR CODE -->
                 <div id="qr-container" class="qr-container">
                     <h3><i class="fas fa-qrcode"></i> Scan to Pay</h3>
                     {% if qr_code %}
@@ -99,13 +99,13 @@
                     </button>
                 </form>
                 
-                <!-- Support Section -->
+                <!-- Support Section - UPDATED (Telegram Support + Telegram Channel) -->
                 <div class="support-section">
                     <h3><i class="fas fa-headset"></i> Need Help?</h3>
                     <div class="support-grid">
-                        <a href="{{ whatsapp_link }}" target="_blank" class="support-card whatsapp">
-                            <i class="fab fa-whatsapp"></i>
-                            <span>WhatsApp Support</span>
+                        <a href="{{ telegram_support }}" target="_blank" class="support-card telegram">
+                            <i class="fab fa-telegram"></i>
+                            <span>Telegram Support</span>
                             <small>Click to chat</small>
                         </a>
                         <a href="{{ telegram_channel }}" target="_blank" class="support-card telegram">
@@ -124,7 +124,7 @@
                         <li>Enter the EXACT amount (minimum ₹{{ min_recharge }})</li>
                         <li>Copy the 12-digit UTR from your payment app</li>
                         <li>Fill the form above and submit</li>
-                        <li>Message on WhatsApp for quick approval</li>
+                        <li>Message on Telegram for quick approval</li>
                         <li>Credits added after admin verification</li>
                     </ol>
                     <div class="warning-box">
@@ -194,16 +194,6 @@
             color: rgba(255, 255, 255, 0.7);
         }
         
-        .support-card.whatsapp {
-            background: #25D366;
-            color: white;
-        }
-        
-        .support-card.whatsapp:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(37, 211, 102, 0.4);
-        }
-        
         .support-card.telegram {
             background: #0088cc;
             color: white;
@@ -214,8 +204,8 @@
             box-shadow: 0 10px 20px rgba(0, 136, 204, 0.4);
         }
         
-        .btn-whatsapp {
-            background: #25D366;
+        .btn-telegram {
+            background: #0088cc;
             color: white;
             border: none;
             border-radius: 10px;
@@ -226,8 +216,8 @@
             gap: 0.5rem;
         }
         
-        .btn-whatsapp:hover {
-            background: #128C7E;
+        .btn-telegram:hover {
+            background: #006699;
             transform: translateY(-3px);
         }
         
@@ -298,20 +288,16 @@
         .catch(error => console.error('Error:', error));
     }
     
-    // Quick amount buttons
     document.querySelectorAll('.amount-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const amount = this.dataset.amount;
             document.getElementById('amount').value = amount;
-            
             document.querySelectorAll('.amount-btn').forEach(b => b.classList.remove('selected'));
             this.classList.add('selected');
-            
             updateQR(amount);
         });
     });
     
-    // Initial update
     window.addEventListener('load', function() {
         const amount = document.getElementById('amount').value;
         updateQR(amount);
