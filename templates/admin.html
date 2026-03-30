@@ -65,35 +65,35 @@
             </button>
         </div>
 
-        <!-- USERS TAB - FIXED -->
+        <!-- USERS TAB -->
         <div id="users-tab" class="tab-content active">
             <div class="card">
                 <h2><i class="fas fa-user-cog"></i> Manage Users</h2>
                 <div class="table-container">
-                    <table>
+                     <table>
                         <thead>
-                            <tr>
+                             <tr>
                                 <th>Username</th>
                                 <th>Credits</th>
                                 <th>Total Recharged</th>
                                 <th>Joined</th>
                                 <th>Actions</th>
-                            </tr>
+                             </tr>
                         </thead>
                         <tbody>
                             {% for user in users %}
-                            <tr>
-                                <td>
+                             <tr>
+                                 <td>
                                     <i class="fas fa-user-circle"></i> 
                                     <strong>{{ user.username }}</strong>
-                                </td>
-                                <td>
+                                 </td>
+                                 <td>
                                     <span class="status-badge status-active">
                                         <i class="fas fa-coins"></i> {{ user.credits }}
                                     </span>
-                                </td>
-                                <td>₹{{ user.total_recharged or 0 }}</td>
-                                <td>
+                                 </td>
+                                 <td>₹{{ user.total_recharged or 0 }}</td>
+                                 <td>
                                     {% if user.created_at %}
                                         {% if user.created_at is string %}
                                             {{ user.created_at[:10] }}
@@ -103,22 +103,22 @@
                                     {% else %}
                                         N/A
                                     {% endif %}
-                                </td>
-                                <td>
+                                 </td>
+                                 <td>
                                     <button class="btn-small btn-add-credits" data-username="{{ user.username }}">
                                         <i class="fas fa-plus-circle"></i> Add Credits
                                     </button>
                                     <button class="btn-small btn-danger btn-delete-user" data-username="{{ user.username }}">
                                         <i class="fas fa-trash"></i> Delete
                                     </button>
-                                    <a href="{{ whatsapp_link }}" target="_blank" class="btn-small btn-whatsapp-small">
-                                        <i class="fab fa-whatsapp"></i> Chat
+                                    <a href="{{ telegram_support }}" target="_blank" class="btn-small btn-telegram-small">
+                                        <i class="fab fa-telegram"></i> Support
                                     </a>
-                                </td>
-                            </tr>
+                                 </td>
+                             </tr>
                             {% endfor %}
                         </tbody>
-                    </table>
+                     </table>
                 </div>
             </div>
         </div>
@@ -128,9 +128,9 @@
             <div class="card">
                 <h2><i class="fas fa-credit-card"></i> Payment Requests</h2>
                 <div class="table-container">
-                    <table>
+                     <table>
                         <thead>
-                            <tr>
+                             <tr>
                                 <th>Method</th>
                                 <th>User</th>
                                 <th>UTR/Order</th>
@@ -139,25 +139,25 @@
                                 <th>Date</th>
                                 <th>Status</th>
                                 <th>Actions</th>
-                            </tr>
+                             </tr>
                         </thead>
                         <tbody>
                             {% for payment in payments %}
-                            <tr>
-                                <td>
+                             <tr>
+                                 <td>
                                     {% if payment.payment_method == 'binance' %}
                                     <span class="key-type-badge" style="background: #f0b90b; color: black;">BINANCE</span>
                                     {% else %}
                                     <span class="key-type-badge">UPI</span>
                                     {% endif %}
-                                </td>
-                                <td>{{ payment.username }}</td>
-                                <td>
+                                 </td>
+                                 <td>{{ payment.username }}</td>
+                                 <td>
                                     <code>{{ payment.utr or payment.order_id }}</code>
-                                </td>
-                                <td>₹{{ payment.amount }}</td>
-                                <td>{{ payment.credits_added }}</td>
-                                <td>
+                                 </td>
+                                 <td>₹{{ payment.amount }}</td>
+                                 <td>{{ payment.credits_added }}</td>
+                                 <td>
                                     {% if payment.date %}
                                         {% if payment.date is string %}
                                             {{ payment.date[:16] }}
@@ -167,13 +167,13 @@
                                     {% else %}
                                         N/A
                                     {% endif %}
-                                </td>
-                                <td>
+                                 </td>
+                                 <td>
                                     <span class="status-badge status-{{ payment.status }}">
                                         {{ payment.status }}
                                     </span>
-                                </td>
-                                <td>
+                                 </td>
+                                 <td>
                                     {% if payment.status == 'pending' %}
                                         {% if payment.payment_method == 'upi' %}
                                         <button class="btn-small btn-approve-payment" data-payment-id="{{ payment.id }}">
@@ -201,17 +201,17 @@
                                         <br><small style="color: var(--accent-red);">{{ payment.rejection_reason }}</small>
                                         {% endif %}
                                     {% endif %}
-                                </td>
-                            </tr>
+                                 </td>
+                             </tr>
                             {% else %}
-                            <tr>
+                             <tr>
                                 <td colspan="8" style="text-align: center; color: var(--text-secondary);">
                                     No payment requests found
                                 </td>
-                            </tr>
+                             </tr>
                             {% endfor %}
                         </tbody>
-                    </table>
+                     </table>
                 </div>
             </div>
         </div>
@@ -221,9 +221,9 @@
             <div class="card">
                 <h2><i class="fas fa-key"></i> All Generated Keys</h2>
                 <div class="table-container">
-                    <table>
+                     <table>
                         <thead>
-                            <tr>
+                             <tr>
                                 <th>Key/Credentials</th>
                                 <th>User</th>
                                 <th>Product</th>
@@ -232,11 +232,11 @@
                                 <th>Expiry</th>
                                 <th>Status</th>
                                 <th>Action</th>
-                            </tr>
+                             </tr>
                         </thead>
                         <tbody>
                             {% for license in licenses %}
-                            <tr>
+                             <tr>
                                 <td class="key-cell">{{ license.key }}</td>
                                 <td>{{ license.username }}</td>
                                 <td>{{ license.product_name }}</td>
@@ -263,10 +263,10 @@
                                         <i class="fas fa-trash"></i> Delete
                                     </button>
                                 </td>
-                            </tr>
+                             </tr>
                             {% endfor %}
                         </tbody>
-                    </table>
+                     </table>
                 </div>
             </div>
         </div>
@@ -327,9 +327,9 @@
 
                 <!-- Products Table -->
                 <div class="table-container">
-                    <table>
+                     <table>
                         <thead>
-                            <tr>
+                             <tr>
                                 <th>Product Name</th>
                                 <th>Credits/Day</th>
                                 <th>Price/Day</th>
@@ -337,11 +337,11 @@
                                 <th>Custom Pattern</th>
                                 <th>Status</th>
                                 <th>Actions</th>
-                            </tr>
+                             </tr>
                         </thead>
                         <tbody>
                             {% for product in products %}
-                            <tr>
+                             <tr>
                                 <td><strong>{{ product.name }}</strong></td>
                                 <td><span class="neon-text-green">{{ product.credit_cost_per_day }}</span></td>
                                 <td>₹{{ product.price_per_day }}</td>
@@ -364,10 +364,10 @@
                                         {{ 'Disable' if product.is_active else 'Enable' }}
                                     </button>
                                 </td>
-                            </tr>
+                             </tr>
                             {% endfor %}
                         </tbody>
-                    </table>
+                     </table>
                 </div>
             </div>
         </div>
@@ -412,18 +412,18 @@
                 
                 <!-- Key Types Table -->
                 <div class="table-container">
-                    <table>
+                     <table>
                         <thead>
-                            <tr>
+                             <tr>
                                 <th>Type Name</th>
                                 <th>Pattern</th>
                                 <th>Description</th>
                                 <th>Created</th>
-                            </tr>
+                             </tr>
                         </thead>
                         <tbody>
                             {% for key_type in key_types %}
-                            <tr>
+                             <tr>
                                 <td><strong>{{ key_type.type_name }}</strong></td>
                                 <td><code>{{ key_type.pattern }}</code></td>
                                 <td>{{ key_type.description }}</td>
@@ -438,10 +438,10 @@
                                         N/A
                                     {% endif %}
                                 </td>
-                            </tr>
+                             </tr>
                             {% endfor %}
                         </tbody>
-                    </table>
+                     </table>
                 </div>
             </div>
         </div>
@@ -517,22 +517,22 @@
         </div>
     </div>
 
-    <!-- Support Section - UPDATED -->
-<div class="support-section" style="margin-top: 2rem;">
-    <h3><i class="fas fa-headset"></i> Quick Support</h3>
-    <div class="support-grid">
-        <a href="{{ telegram_support }}" target="_blank" class="support-card telegram">
-            <i class="fab fa-telegram"></i>
-            <span>Telegram Support</span>
-            <small>Click to chat with admin</small>
-        </a>
-        <a href="{{ telegram_channel }}" target="_blank" class="support-card telegram">
-            <i class="fab fa-telegram"></i>
-            <span>Telegram Channel</span>
-            <small>Join for updates</small>
-        </a>
+    <!-- SUPPORT SECTION - UPDATED WITH TELEGRAM SUPPORT -->
+    <div class="support-section" style="margin-top: 2rem;">
+        <h3><i class="fas fa-headset"></i> Quick Support</h3>
+        <div class="support-grid">
+            <a href="{{ telegram_support }}" target="_blank" class="support-card telegram">
+                <i class="fab fa-telegram"></i>
+                <span>Telegram Support</span>
+                <small>Click to chat with admin</small>
+            </a>
+            <a href="{{ telegram_channel }}" target="_blank" class="support-card telegram">
+                <i class="fab fa-telegram"></i>
+                <span>Telegram Channel</span>
+                <small>Join for updates</small>
+            </a>
+        </div>
     </div>
-</div>
 
     <style>
         .badge {
@@ -547,6 +547,24 @@
         .gap-2 { gap: 1rem; }
         .btn-cancel-binance:hover {
             background: #e68900 !important;
+        }
+        .btn-telegram-small {
+            background: #0088cc;
+            color: white;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.2s ease;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-telegram-small:hover {
+            background: #006699;
+            transform: translateY(-2px);
         }
     </style>
 
