@@ -143,6 +143,20 @@ def init_db():
             )
         ''')
         
+        # Notifications table (NEW)
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS notifications (
+                id SERIAL PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                target_user VARCHAR(100),
+                is_global BOOLEAN DEFAULT FALSE,
+                created_by VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                read_by TEXT DEFAULT ''
+            )
+        ''')
+        
         # Insert default key types
         default_key_types = [
             ('fluorite', 'RANDOM16', '16 characters random'),
@@ -303,7 +317,7 @@ def add_missing_columns():
 add_missing_columns()
 
 # ============================================
-# CONSTANTS - UPDATED (WhatsApp Removed, Telegram Support Added)
+# CONSTANTS - UPDATED (WhatsApp Channel Added)
 # ============================================
 
 CREDIT_RATE = float(os.getenv('CREDIT_RATE', 0.5))
@@ -315,7 +329,7 @@ UPI_NAME = os.getenv('UPI_NAME', 'Digamber Raj')
 # SUPPORT LINKS - UPDATED
 # ============================================
 TELEGRAM_SUPPORT_LINK = os.getenv('TELEGRAM_SUPPORT_LINK', 'https://t.me/SMGrowMarthqofc')
-TELEGRAM_CHANNEL = os.getenv('TELEGRAM_CHANNEL', 'https://t.me/growmarthq')
+WHATSAPP_CHANNEL = os.getenv('WHATSAPP_CHANNEL', 'https://whatsapp.com/channel/0029Vb8933MC6ZvoqBiPVq2h')
 USD_TO_INR = 98
 BINANCE_ADDRESS = '1143351874'
 
@@ -327,28 +341,21 @@ DISCORD_GUILD_ID = os.getenv('DISCORD_GUILD_ID', '1344323930923601992')
 DISCORD_INVITE_LINK = os.getenv('DISCORD_INVITE_LINK', 'https://discord.gg/ATK3JcG7rB')
 
 # ============================================
-# DISCORD VERIFICATION - WITH CACHING (FIXED FOR RATE LIMITS)
+# DISCORD VERIFICATION - WITH CACHING
 # ============================================
 
-# Simple in-memory cache
 discord_cache = {}
-CACHE_DURATION = 300  # 5 minutes
+CACHE_DURATION = 300
 
 def check_discord_membership(discord_user_id):
-    """
-    Check if user is a member of the Discord server using Bot API
-    With caching to avoid rate limits
-    """
     discord_user_id = str(discord_user_id).strip()
     
-    # Check cache first
     if discord_user_id in discord_cache:
         cache_time, result = discord_cache[discord_user_id]
         if time.time() - cache_time < CACHE_DURATION:
             logging.info(f"✅ Using cached result for {discord_user_id}")
             return result
     
-    # Log Discord configuration
     logging.info(f"🔍 Discord Bot Token configured: {'Yes' if DISCORD_BOT_TOKEN else 'No'}")
     logging.info(f"🔍 Discord Guild ID: {DISCORD_GUILD_ID}")
     
@@ -359,99 +366,31 @@ def check_discord_membership(discord_user_id):
             return True
         return False
     
-    # Validate Discord ID format
     if not discord_user_id.isdigit():
         logging.error(f"❌ Invalid Discord ID format: {discord_user_id}")
         return False
     
-    # Prepare API request
     url = f"https://discord.com/api/v10/guilds/{DISCORD_GUILD_ID}/members/{discord_user_id}"
     headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}"}
     
     try:
         logging.info(f"🔍 Checking Discord membership for user: {discord_user_id}")
-        
-        # Make request with timeout
         response = requests.get(url, headers=headers, timeout=10)
-        
-        # Log response status
         logging.info(f"🔍 Discord API Response Status: {response.status_code}")
         
-        # Handle different response codes
         if response.status_code == 200:
-            # User is in the server
             logging.info(f"✅ Discord user {discord_user_id} is a member")
             discord_cache[discord_user_id] = (time.time(), True)
             return True
-            
         elif response.status_code == 404:
-            # User not in server
-            logging.warning(f"❌ Discord user {discord_user_id} is NOT a member of the server")
+            logging.warning(f"❌ Discord user {discord_user_id} is NOT a member")
             discord_cache[discord_user_id] = (time.time(), False)
             return False
-            
-        elif response.status_code == 401:
-            # Invalid bot token
-            logging.error(f"❌ Discord API 401 Unauthorized - Bot token is invalid or expired!")
-            logging.error("   Please regenerate your bot token in Discord Developer Portal")
-            discord_cache[discord_user_id] = (time.time(), True)
-            return True
-            
-        elif response.status_code == 403:
-            # Missing permissions/intents
-            logging.error(f"❌ Discord API 403 Forbidden - Missing permissions or intents!")
-            logging.error("   Please enable SERVER MEMBERS INTENT in Discord Developer Portal")
-            discord_cache[discord_user_id] = (time.time(), True)
-            return True
-            
-        elif response.status_code == 429:
-            # Rate limited
-            retry_after = response.headers.get('Retry-After', '60')
-            logging.error(f"❌ Discord API Rate Limited - Retry after {retry_after} seconds")
-            
-            # Get retry time from JSON if available
-            try:
-                data = response.json()
-                retry_after = data.get('retry_after', retry_after)
-                logging.info(f"📊 Rate limit details: {data}")
-            except:
-                pass
-            
-            # Store in cache that we're rate limited (allow registration for now)
-            logging.warning("⚠️ Rate limited - Temporarily allowing registration")
-            discord_cache[discord_user_id] = (time.time(), True)
-            return True
-            
         else:
-            # Other errors
-            logging.error(f"❌ Discord API error: {response.status_code}")
-            try:
-                error_data = response.json()
-                logging.error(f"   Error details: {error_data}")
-            except:
-                logging.error(f"   Response: {response.text[:200]}")
-            
             discord_cache[discord_user_id] = (time.time(), True)
             return True
-            
-    except requests.exceptions.ConnectionError as e:
-        logging.error(f"❌ Discord API Connection Error - Cannot reach Discord servers")
-        logging.error(f"   Details: {str(e)}")
-        discord_cache[discord_user_id] = (time.time(), True)
-        return True
-        
-    except requests.exceptions.Timeout:
-        logging.error(f"❌ Discord API Timeout - Request took too long")
-        discord_cache[discord_user_id] = (time.time(), True)
-        return True
-        
-    except requests.exceptions.RequestException as e:
-        logging.error(f"❌ Discord API Request Error: {str(e)}")
-        discord_cache[discord_user_id] = (time.time(), True)
-        return True
-        
     except Exception as e:
-        logging.error(f"❌ Unexpected error checking Discord membership: {str(e)}")
+        logging.error(f"❌ Discord API error: {str(e)}")
         discord_cache[discord_user_id] = (time.time(), True)
         return True
 
@@ -460,11 +399,6 @@ def check_discord_membership(discord_user_id):
 # ============================================
 
 def calculate_discounted_credits(base_credit_per_day, days):
-    """
-    ULTRA DISCOUNT - Works for ANY base price!
-    Based on exact example: 1->4, 3->6, 7->8, 15->12, 30->16, 60->20, 90->24
-    """
-    # Debug print
     print(f"🔥 DISCOUNT DEBUG - Base: {base_credit_per_day}, Days: {days}")
     
     if days == 1:
@@ -482,18 +416,15 @@ def calculate_discounted_credits(base_credit_per_day, days):
     elif days == 90:
         result = base_credit_per_day * 6.0
     else:
-        # For custom days, interpolate between standard points
         std_days = [1, 3, 7, 15, 30, 60, 90]
         std_mult = [1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0]
         
         if days < 1:
             result = base_credit_per_day
         elif days > 90:
-            # Beyond 90, continue the trend (approx +0.5 multiplier per 30 days)
             extra = (days - 90) / 30 * 0.5
             result = base_credit_per_day * (6.0 + extra)
         else:
-            # Find interval
             for i in range(len(std_days)-1):
                 if std_days[i] < days < std_days[i+1]:
                     ratio = (days - std_days[i]) / (std_days[i+1] - std_days[i])
@@ -501,7 +432,7 @@ def calculate_discounted_credits(base_credit_per_day, days):
                     result = base_credit_per_day * mult
                     break
             else:
-                result = base_credit_per_day * days  # fallback
+                result = base_credit_per_day * days
     
     print(f"🔥 DISCOUNT RESULT: {result}")
     return result
@@ -512,7 +443,6 @@ def calculate_discounted_credits(base_credit_per_day, days):
 
 @app.route('/api/discounted_price', methods=['POST'])
 def api_discounted_price():
-    """Return discounted total credits for given product and days"""
     data = request.get_json()
     product_id = data.get('product_id')
     days = int(data.get('days', 1))
@@ -730,6 +660,99 @@ def format_datetime(dt):
     return str(dt)
 
 # ============================================
+# NOTIFICATION ROUTES (NEW)
+# ============================================
+
+@app.route('/api/notifications')
+def get_notifications():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    username = session['username']
+    
+    # Get unread notifications for this user
+    c.execute('''
+        SELECT * FROM notifications 
+        WHERE (is_global = TRUE OR target_user = %s)
+        AND read_by NOT LIKE %s
+        ORDER BY created_at DESC
+        LIMIT 50
+    ''', (username, f'%{username}%'))
+    
+    notifications = c.fetchall()
+    conn.close()
+    
+    return jsonify({'success': True, 'notifications': notifications})
+
+@app.route('/api/notifications/mark_read', methods=['POST'])
+def mark_notification_read():
+    if 'username' not in session:
+        return jsonify({'success': False, 'error': 'Not logged in'})
+    
+    data = request.get_json()
+    notification_id = data.get('notification_id')
+    username = session['username']
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    c.execute('SELECT read_by FROM notifications WHERE id = %s', (notification_id,))
+    notif = c.fetchone()
+    
+    if notif:
+        read_list = notif['read_by'] or ''
+        if username not in read_list:
+            new_read = read_list + ',' + username if read_list else username
+            c.execute('UPDATE notifications SET read_by = %s WHERE id = %s', (new_read, notification_id))
+            conn.commit()
+    
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/admin/send_notification', methods=['POST'])
+def send_notification():
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    data = request.get_json()
+    title = data.get('title', 'Announcement')
+    message = data.get('message', '')
+    target_user = data.get('target_user')  # None = all users, or specific username
+    is_global = target_user is None or target_user == ''
+    
+    if not message:
+        return jsonify({'success': False, 'error': 'Message required'})
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    c.execute('''
+        INSERT INTO notifications (title, message, target_user, is_global, created_by)
+        VALUES (%s, %s, %s, %s, %s)
+    ''', (title, message, target_user if not is_global else None, is_global, session['username']))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'Notification sent'})
+
+@app.route('/admin/get_users_list')
+def get_users_list():
+    if 'username' not in session or session.get('role') != 'admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'})
+    
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT username FROM users WHERE role != 'admin' ORDER BY username")
+    users = c.fetchall()
+    conn.close()
+    
+    return jsonify({'success': True, 'users': [u['username'] for u in users]})
+
+# ============================================
 # AUTH ROUTES
 # ============================================
 
@@ -782,30 +805,36 @@ def register():
         if not username or not password or not discord_id:
             return render_template('register.html', 
                                  error='Username, Password, and Discord ID are required',
-                                 discord_invite=DISCORD_INVITE_LINK)
+                                 discord_invite=DISCORD_INVITE_LINK,
+                                 whatsapp_channel=WHATSAPP_CHANNEL,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK)
         
         if password != confirm:
             return render_template('register.html', 
                                  error='Passwords do not match',
-                                 discord_invite=DISCORD_INVITE_LINK)
+                                 discord_invite=DISCORD_INVITE_LINK,
+                                 whatsapp_channel=WHATSAPP_CHANNEL,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK)
         
         if len(password) < 6:
             return render_template('register.html', 
                                  error='Password must be at least 6 characters',
-                                 discord_invite=DISCORD_INVITE_LINK)
+                                 discord_invite=DISCORD_INVITE_LINK,
+                                 whatsapp_channel=WHATSAPP_CHANNEL,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK)
         
-        # DISCORD VERIFICATION WITH CACHING
         logging.info(f"🔍 Attempting Discord verification for user: {discord_id}")
         is_member = check_discord_membership(discord_id)
         
         if not is_member:
             return render_template('register.html', 
                                  error=f'❌ You must join our Discord server first! Join here: {DISCORD_INVITE_LINK}',
-                                 discord_invite=DISCORD_INVITE_LINK)
+                                 discord_invite=DISCORD_INVITE_LINK,
+                                 whatsapp_channel=WHATSAPP_CHANNEL,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK)
         
         logging.info(f"✅ Discord verification passed for user: {discord_id}")
         
-        # Discord verified, proceed with registration
         hashed = bcrypt.generate_password_hash(password).decode('utf-8')
         
         conn = get_db_connection()
@@ -825,12 +854,19 @@ def register():
             if 'duplicate key' in str(e):
                 return render_template('register.html', 
                                      error='Username or Discord ID already exists',
-                                     discord_invite=DISCORD_INVITE_LINK)
+                                     discord_invite=DISCORD_INVITE_LINK,
+                                     whatsapp_channel=WHATSAPP_CHANNEL,
+                                     telegram_support=TELEGRAM_SUPPORT_LINK)
             return render_template('register.html', 
                                  error='Registration failed. Please try again.',
-                                 discord_invite=DISCORD_INVITE_LINK)
+                                 discord_invite=DISCORD_INVITE_LINK,
+                                 whatsapp_channel=WHATSAPP_CHANNEL,
+                                 telegram_support=TELEGRAM_SUPPORT_LINK)
     
-    return render_template('register.html', discord_invite=DISCORD_INVITE_LINK)
+    return render_template('register.html', 
+                         discord_invite=DISCORD_INVITE_LINK,
+                         whatsapp_channel=WHATSAPP_CHANNEL,
+                         telegram_support=TELEGRAM_SUPPORT_LINK)
 
 @app.route('/logout')
 def logout():
@@ -838,7 +874,7 @@ def logout():
     return redirect(url_for('login'))
 
 # ============================================
-# USER DASHBOARD - UPDATED WITH TELEGRAM SUPPORT
+# USER DASHBOARD
 # ============================================
 
 @app.route('/dashboard')
@@ -887,10 +923,10 @@ def user_dashboard():
                          payments=payments,
                          format_datetime=format_datetime,
                          telegram_support=TELEGRAM_SUPPORT_LINK,
-                         telegram_channel=TELEGRAM_CHANNEL)
+                         whatsapp_channel=WHATSAPP_CHANNEL)
 
 # ============================================
-# KEY GENERATION - WITH ULTRA DISCOUNT
+# KEY GENERATION
 # ============================================
 
 @app.route('/generate_key', methods=['POST'])
@@ -913,15 +949,12 @@ def generate_key_route():
         return jsonify({'success': False, 'error': 'Product not found'})
     
     base_credit = float(product['credit_cost_per_day'])
-    
-    # ULTRA DISCOUNT
     total_credits = calculate_discounted_credits(base_credit, days)
     
     c.execute("SELECT credits FROM users WHERE username = %s", (session['username'],))
     result = c.fetchone()
     user_credits = result['credits']
     
-    # FIX: Convert both to float
     if float(user_credits) < float(total_credits):
         conn.close()
         return jsonify({'success': False, 'error': f'Need {total_credits} credits'})
@@ -929,7 +962,6 @@ def generate_key_route():
     key = key_gen.generate_key(product['key_type'], product.get('custom_key_pattern'))
     expiry = datetime.now() + timedelta(days=days)
     
-    # FIX: Convert to float
     new_credits = float(user_credits) - float(total_credits)
     c.execute('UPDATE users SET credits = %s WHERE username = %s',
              (new_credits, session['username']))
@@ -955,7 +987,7 @@ def generate_key_route():
     })
 
 # ============================================
-# PAYMENT ROUTES - UPDATED WITH TELEGRAM SUPPORT
+# PAYMENT ROUTES
 # ============================================
 
 @app.route('/payment')
@@ -970,7 +1002,7 @@ def payment_page():
                          usd_to_inr=USD_TO_INR,
                          binance_address=BINANCE_ADDRESS,
                          telegram_support=TELEGRAM_SUPPORT_LINK,
-                         telegram_channel=TELEGRAM_CHANNEL)
+                         whatsapp_channel=WHATSAPP_CHANNEL)
 
 @app.route('/payment/upi', methods=['GET', 'POST'])
 def upi_payment():
@@ -992,7 +1024,7 @@ def upi_payment():
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
                                  telegram_support=TELEGRAM_SUPPORT_LINK,
-                                 telegram_channel=TELEGRAM_CHANNEL)
+                                 whatsapp_channel=WHATSAPP_CHANNEL)
         
         if not utr or len(utr) != 12 or not utr.isdigit():
             qr = generate_upi_qr(amount)
@@ -1006,7 +1038,7 @@ def upi_payment():
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
                                  telegram_support=TELEGRAM_SUPPORT_LINK,
-                                 telegram_channel=TELEGRAM_CHANNEL)
+                                 whatsapp_channel=WHATSAPP_CHANNEL)
         
         credits = amount * CREDIT_RATE
         
@@ -1033,7 +1065,7 @@ def upi_payment():
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
                                  telegram_support=TELEGRAM_SUPPORT_LINK,
-                                 telegram_channel=TELEGRAM_CHANNEL)
+                                 whatsapp_channel=WHATSAPP_CHANNEL)
         except:
             conn.close()
             qr = generate_upi_qr(amount)
@@ -1047,7 +1079,7 @@ def upi_payment():
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
                                  telegram_support=TELEGRAM_SUPPORT_LINK,
-                                 telegram_channel=TELEGRAM_CHANNEL)
+                                 whatsapp_channel=WHATSAPP_CHANNEL)
     
     qr_code = generate_upi_qr(MINIMUM_RECHARGE)
     return render_template('upi_payment.html',
@@ -1059,7 +1091,7 @@ def upi_payment():
                          usd_to_inr=USD_TO_INR,
                          binance_address=BINANCE_ADDRESS,
                          telegram_support=TELEGRAM_SUPPORT_LINK,
-                         telegram_channel=TELEGRAM_CHANNEL)
+                         whatsapp_channel=WHATSAPP_CHANNEL)
 
 @app.route('/payment/binance', methods=['GET', 'POST'])
 def binance_payment():
@@ -1077,7 +1109,7 @@ def binance_payment():
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
                                  telegram_support=TELEGRAM_SUPPORT_LINK,
-                                 telegram_channel=TELEGRAM_CHANNEL)
+                                 whatsapp_channel=WHATSAPP_CHANNEL)
         
         amount_usd = round(amount_inr / USD_TO_INR, 2)
         
@@ -1111,7 +1143,7 @@ def binance_payment():
                                  credit_rate=CREDIT_RATE,
                                  usd_to_inr=USD_TO_INR,
                                  telegram_support=TELEGRAM_SUPPORT_LINK,
-                                 telegram_channel=TELEGRAM_CHANNEL)
+                                 whatsapp_channel=WHATSAPP_CHANNEL)
         else:
             return render_template('binance_payment.html',
                                  error='Unable to create Binance order. Please try UPI.',
@@ -1120,7 +1152,7 @@ def binance_payment():
                                  usd_to_inr=USD_TO_INR,
                                  binance_address=BINANCE_ADDRESS,
                                  telegram_support=TELEGRAM_SUPPORT_LINK,
-                                 telegram_channel=TELEGRAM_CHANNEL)
+                                 whatsapp_channel=WHATSAPP_CHANNEL)
     
     return render_template('binance_payment.html',
                          min_recharge=MINIMUM_RECHARGE,
@@ -1128,7 +1160,7 @@ def binance_payment():
                          usd_to_inr=USD_TO_INR,
                          binance_address=BINANCE_ADDRESS,
                          telegram_support=TELEGRAM_SUPPORT_LINK,
-                         telegram_channel=TELEGRAM_CHANNEL)
+                         whatsapp_channel=WHATSAPP_CHANNEL)
 
 @app.route('/payment/binance/check/<order_id>')
 def check_binance_payment(order_id):
@@ -1201,7 +1233,7 @@ def generate_payment_qr():
     })
 
 # ============================================
-# ADMIN DASHBOARD - UPDATED WITH TELEGRAM SUPPORT
+# ADMIN DASHBOARD
 # ============================================
 
 @app.route('/admin')
@@ -1212,7 +1244,6 @@ def admin_dashboard():
     conn = get_db_connection()
     c = conn.cursor()
     
-    # Stats
     c.execute("SELECT COUNT(*) FROM users WHERE role = 'user'")
     total_users = c.fetchone()['count']
     
@@ -1228,26 +1259,21 @@ def admin_dashboard():
     c.execute("SELECT COUNT(*) FROM licenses WHERE status = 'active'")
     active_keys = c.fetchone()['count']
     
-    # Users
     c.execute("SELECT * FROM users WHERE role != 'admin' ORDER BY credits DESC")
     users = c.fetchall()
     
-    # Payments
     c.execute('''
         SELECT * FROM payments 
         ORDER BY CASE status WHEN 'pending' THEN 1 ELSE 2 END, date DESC
     ''')
     payments = c.fetchall()
     
-    # Licenses
     c.execute("SELECT * FROM licenses ORDER BY expiry_date DESC LIMIT 100")
     licenses = c.fetchall()
     
-    # Products
     c.execute("SELECT * FROM products ORDER BY name")
     products = c.fetchall()
     
-    # Key types
     c.execute("SELECT * FROM key_types ORDER BY type_name")
     key_types = c.fetchall()
     
@@ -1267,7 +1293,7 @@ def admin_dashboard():
                          format_datetime=format_datetime,
                          binance_address=BINANCE_ADDRESS,
                          telegram_support=TELEGRAM_SUPPORT_LINK,
-                         telegram_channel=TELEGRAM_CHANNEL)
+                         whatsapp_channel=WHATSAPP_CHANNEL)
 
 # ============================================
 # ADMIN - PAYMENT ACTIONS
@@ -1627,11 +1653,15 @@ def hwid_reset_all():
 
 @app.errorhandler(500)
 def internal_error(error):
-    return render_template('error.html', error="Internal Server Error"), 500
+    return render_template('error.html', error="Internal Server Error",
+                         telegram_support=TELEGRAM_SUPPORT_LINK,
+                         whatsapp_channel=WHATSAPP_CHANNEL), 500
 
 @app.errorhandler(404)
 def not_found_error(error):
-    return render_template('error.html', error="Page not found"), 404
+    return render_template('error.html', error="Page not found",
+                         telegram_support=TELEGRAM_SUPPORT_LINK,
+                         whatsapp_channel=WHATSAPP_CHANNEL), 404
 
 # ============================================
 # MAIN
