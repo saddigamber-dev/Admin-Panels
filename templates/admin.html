@@ -12,6 +12,9 @@
         <div class="nav-container">
             <img src="https://i.ibb.co/1GBn25c5/VID-20260310-172522-610-ezgif-com-video-to-gif-converter.gif" alt="Logo" class="nav-logo">
             <div class="nav-user">👑 Admin: {{ session.username }}</div>
+            <button id="send-notification-btn" class="btn-notification">
+                <i class="fas fa-bell"></i> Send Notification
+            </button>
             <a href="{{ url_for('logout') }}" class="btn-logout">
                 <i class="fas fa-sign-out-alt"></i> Logout
             </a>
@@ -70,55 +73,35 @@
             <div class="card">
                 <h2><i class="fas fa-user-cog"></i> Manage Users</h2>
                 <div class="table-container">
-                     <table>
+                    <table>
                         <thead>
-                             <tr>
+                            <tr>
                                 <th>Username</th>
                                 <th>Credits</th>
                                 <th>Total Recharged</th>
                                 <th>Joined</th>
                                 <th>Actions</th>
-                             </tr>
+                            </tr>
                         </thead>
                         <tbody>
                             {% for user in users %}
-                             <tr>
-                                 <td>
-                                    <i class="fas fa-user-circle"></i> 
-                                    <strong>{{ user.username }}</strong>
-                                 </td>
-                                 <td>
-                                    <span class="status-badge status-active">
-                                        <i class="fas fa-coins"></i> {{ user.credits }}
-                                    </span>
-                                 </td>
-                                 <td>₹{{ user.total_recharged or 0 }}</td>
-                                 <td>
-                                    {% if user.created_at %}
-                                        {% if user.created_at is string %}
-                                            {{ user.created_at[:10] }}
-                                        {% else %}
-                                            {{ user.created_at.strftime('%Y-%m-%d') }}
-                                        {% endif %}
-                                    {% else %}
-                                        N/A
-                                    {% endif %}
-                                 </td>
-                                 <td>
+                            <tr>
+                                <td><i class="fas fa-user-circle"></i> <strong>{{ user.username }}</strong></td>
+                                <td><span class="status-badge status-active"><i class="fas fa-coins"></i> {{ user.credits }}</span></td>
+                                <td>₹{{ user.total_recharged or 0 }}</td>
+                                <td>{% if user.created_at %}{% if user.created_at is string %}{{ user.created_at[:10] }}{% else %}{{ user.created_at.strftime('%Y-%m-%d') }}{% endif %}{% else %}N/A{% endif %}</td>
+                                <td>
                                     <button class="btn-small btn-add-credits" data-username="{{ user.username }}">
                                         <i class="fas fa-plus-circle"></i> Add Credits
                                     </button>
                                     <button class="btn-small btn-danger btn-delete-user" data-username="{{ user.username }}">
                                         <i class="fas fa-trash"></i> Delete
                                     </button>
-                                    <a href="{{ telegram_support }}" target="_blank" class="btn-small btn-telegram-small">
-                                        <i class="fab fa-telegram"></i> Support
-                                    </a>
-                                 </td>
-                             </tr>
+                                </td>
+                            </tr>
                             {% endfor %}
                         </tbody>
-                     </table>
+                    </table>
                 </div>
             </div>
         </div>
@@ -128,9 +111,9 @@
             <div class="card">
                 <h2><i class="fas fa-credit-card"></i> Payment Requests</h2>
                 <div class="table-container">
-                     <table>
+                    <table>
                         <thead>
-                             <tr>
+                            <tr>
                                 <th>Method</th>
                                 <th>User</th>
                                 <th>UTR/Order</th>
@@ -139,41 +122,25 @@
                                 <th>Date</th>
                                 <th>Status</th>
                                 <th>Actions</th>
-                             </tr>
+                            </tr>
                         </thead>
                         <tbody>
                             {% for payment in payments %}
-                             <tr>
-                                 <td>
+                            <tr>
+                                <td>
                                     {% if payment.payment_method == 'binance' %}
                                     <span class="key-type-badge" style="background: #f0b90b; color: black;">BINANCE</span>
                                     {% else %}
                                     <span class="key-type-badge">UPI</span>
                                     {% endif %}
-                                 </td>
-                                 <td>{{ payment.username }}</td>
-                                 <td>
-                                    <code>{{ payment.utr or payment.order_id }}</code>
-                                 </td>
-                                 <td>₹{{ payment.amount }}</td>
-                                 <td>{{ payment.credits_added }}</td>
-                                 <td>
-                                    {% if payment.date %}
-                                        {% if payment.date is string %}
-                                            {{ payment.date[:16] }}
-                                        {% else %}
-                                            {{ payment.date.strftime('%Y-%m-%d %H:%M') }}
-                                        {% endif %}
-                                    {% else %}
-                                        N/A
-                                    {% endif %}
-                                 </td>
-                                 <td>
-                                    <span class="status-badge status-{{ payment.status }}">
-                                        {{ payment.status }}
-                                    </span>
-                                 </td>
-                                 <td>
+                                </td>
+                                <td>{{ payment.username }}</td>
+                                <td><code>{{ payment.utr or payment.order_id }}</code></td>
+                                <td>₹{{ payment.amount }}</td>
+                                <td>{{ payment.credits_added }}</td>
+                                <td>{% if payment.date %}{% if payment.date is string %}{{ payment.date[:16] }}{% else %}{{ payment.date.strftime('%Y-%m-%d %H:%M') }}{% endif %}{% else %}N/A{% endif %}</td>
+                                <td><span class="status-badge status-{{ payment.status }}">{{ payment.status }}</span></td>
+                                <td>
                                     {% if payment.status == 'pending' %}
                                         {% if payment.payment_method == 'upi' %}
                                         <button class="btn-small btn-approve-payment" data-payment-id="{{ payment.id }}">
@@ -192,26 +159,22 @@
                                         {% endif %}
                                     {% elif payment.status == 'approved' %}
                                         <span class="status-badge status-active">Approved</span>
-                                        {% if payment.approved_by %}
-                                        <br><small>by {{ payment.approved_by }}</small>
-                                        {% endif %}
+                                        {% if payment.approved_by %}<br><small>by {{ payment.approved_by }}</small>{% endif %}
                                     {% elif payment.status == 'rejected' %}
                                         <span class="status-badge status-inactive">Rejected</span>
-                                        {% if payment.rejection_reason %}
-                                        <br><small style="color: var(--accent-red);">{{ payment.rejection_reason }}</small>
-                                        {% endif %}
+                                        {% if payment.rejection_reason %}<br><small style="color: var(--accent-red);">{{ payment.rejection_reason }}</small>{% endif %}
                                     {% endif %}
-                                 </td>
-                             </tr>
+                                </td>
+                            </tr>
                             {% else %}
-                             <tr>
+                            <tr>
                                 <td colspan="8" style="text-align: center; color: var(--text-secondary);">
                                     No payment requests found
                                 </td>
-                             </tr>
+                            </tr>
                             {% endfor %}
                         </tbody>
-                     </table>
+                    </table>
                 </div>
             </div>
         </div>
@@ -221,9 +184,9 @@
             <div class="card">
                 <h2><i class="fas fa-key"></i> All Generated Keys</h2>
                 <div class="table-container">
-                     <table>
+                    <table>
                         <thead>
-                             <tr>
+                            <tr>
                                 <th>Key/Credentials</th>
                                 <th>User</th>
                                 <th>Product</th>
@@ -232,41 +195,23 @@
                                 <th>Expiry</th>
                                 <th>Status</th>
                                 <th>Action</th>
-                             </tr>
+                            </tr>
                         </thead>
                         <tbody>
                             {% for license in licenses %}
-                             <tr>
+                            <tr>
                                 <td class="key-cell">{{ license.key }}</td>
                                 <td>{{ license.username }}</td>
                                 <td>{{ license.product_name }}</td>
                                 <td>{{ license.days }} days</td>
                                 <td>{{ license.total_credits }}</td>
-                                <td>
-                                    {% if license.expiry_date %}
-                                        {% if license.expiry_date is string %}
-                                            {{ license.expiry_date[:16] }}
-                                        {% else %}
-                                            {{ license.expiry_date.strftime('%Y-%m-%d %H:%M') }}
-                                        {% endif %}
-                                    {% else %}
-                                        N/A
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <span class="status-badge status-{{ license.status }}">
-                                        {{ license.status }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <button class="btn-small btn-danger btn-delete-key" data-license-id="{{ license.id }}">
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
-                                </td>
-                             </tr>
+                                <td>{% if license.expiry_date %}{% if license.expiry_date is string %}{{ license.expiry_date[:16] }}{% else %}{{ license.expiry_date.strftime('%Y-%m-%d %H:%M') }}{% endif %}{% else %}N/A{% endif %}</td>
+                                <td><span class="status-badge status-{{ license.status }}">{{ license.status }}</span></td>
+                                <td><button class="btn-small btn-danger btn-delete-key" data-license-id="{{ license.id }}"><i class="fas fa-trash"></i> Delete</button></td>
+                            </tr>
                             {% endfor %}
                         </tbody>
-                     </table>
+                    </table>
                 </div>
             </div>
         </div>
@@ -327,9 +272,9 @@
 
                 <!-- Products Table -->
                 <div class="table-container">
-                     <table>
+                    <table>
                         <thead>
-                             <tr>
+                            <tr>
                                 <th>Product Name</th>
                                 <th>Credits/Day</th>
                                 <th>Price/Day</th>
@@ -337,11 +282,11 @@
                                 <th>Custom Pattern</th>
                                 <th>Status</th>
                                 <th>Actions</th>
-                             </tr>
+                            </tr>
                         </thead>
                         <tbody>
                             {% for product in products %}
-                             <tr>
+                            <tr>
                                 <td><strong>{{ product.name }}</strong></td>
                                 <td><span class="neon-text-green">{{ product.credit_cost_per_day }}</span></td>
                                 <td>₹{{ product.price_per_day }}</td>
@@ -364,10 +309,10 @@
                                         {{ 'Disable' if product.is_active else 'Enable' }}
                                     </button>
                                 </td>
-                             </tr>
+                            </tr>
                             {% endfor %}
                         </tbody>
-                     </table>
+                    </table>
                 </div>
             </div>
         </div>
@@ -412,36 +357,26 @@
                 
                 <!-- Key Types Table -->
                 <div class="table-container">
-                     <table>
+                    <table>
                         <thead>
-                             <tr>
+                            <tr>
                                 <th>Type Name</th>
                                 <th>Pattern</th>
                                 <th>Description</th>
                                 <th>Created</th>
-                             </tr>
+                            </tr>
                         </thead>
                         <tbody>
                             {% for key_type in key_types %}
-                             <tr>
+                            <tr>
                                 <td><strong>{{ key_type.type_name }}</strong></td>
                                 <td><code>{{ key_type.pattern }}</code></td>
                                 <td>{{ key_type.description }}</td>
-                                <td>
-                                    {% if key_type.created_at %}
-                                        {% if key_type.created_at is string %}
-                                            {{ key_type.created_at[:10] }}
-                                        {% else %}
-                                            {{ key_type.created_at.strftime('%Y-%m-%d') }}
-                                        {% endif %}
-                                    {% else %}
-                                        N/A
-                                    {% endif %}
-                                </td>
-                             </tr>
+                                <td>{% if key_type.created_at %}{% if key_type.created_at is string %}{{ key_type.created_at[:10] }}{% else %}{{ key_type.created_at.strftime('%Y-%m-%d') }}{% endif %}{% else %}N/A{% endif %}</td>
+                            </tr>
                             {% endfor %}
                         </tbody>
-                     </table>
+                    </table>
                 </div>
             </div>
         </div>
@@ -517,7 +452,44 @@
         </div>
     </div>
 
-    <!-- SUPPORT SECTION - UPDATED WITH TELEGRAM SUPPORT -->
+    <!-- NOTIFICATION MODAL -->
+    <div id="notification-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3><i class="fas fa-bell"></i> Send Notification</h3>
+            
+            <div class="form-group">
+                <label>Title (Optional):</label>
+                <input type="text" id="notification-title" placeholder="e.g., Announcement, Update, Offer">
+            </div>
+            
+            <div class="form-group">
+                <label>Message:</label>
+                <textarea id="notification-message" rows="4" placeholder="Enter your message here..." required></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Send to:</label>
+                <select id="notification-target">
+                    <option value="all">📢 All Users</option>
+                    <option value="specific">🎯 Specific User</option>
+                </select>
+                <select id="user-list-select" style="display: none; margin-top: 10px;">
+                    <option value="">-- Select User --</option>
+                </select>
+            </div>
+            
+            <div class="flex gap-2">
+                <button class="btn-primary" id="send-notification-submit">
+                    <i class="fas fa-paper-plane"></i> Send
+                </button>
+                <button class="btn-secondary" id="close-notification-modal">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUPPORT SECTION -->
     <div class="support-section" style="margin-top: 2rem;">
         <h3><i class="fas fa-headset"></i> Quick Support</h3>
         <div class="support-grid">
@@ -526,9 +498,9 @@
                 <span>Telegram Support</span>
                 <small>Click to chat with admin</small>
             </a>
-            <a href="{{ telegram_channel }}" target="_blank" class="support-card telegram">
-                <i class="fab fa-telegram"></i>
-                <span>Telegram Channel</span>
+            <a href="{{ whatsapp_channel }}" target="_blank" class="support-card whatsapp">
+                <i class="fab fa-whatsapp"></i>
+                <span>WhatsApp Channel</span>
                 <small>Join for updates</small>
             </a>
         </div>
@@ -565,6 +537,31 @@
         .btn-telegram-small:hover {
             background: #006699;
             transform: translateY(-2px);
+        }
+        .btn-notification {
+            background: linear-gradient(145deg, #ff00ff, #cc00cc);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 40px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.8rem;
+            transition: all 0.3s ease;
+        }
+        .btn-notification:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 20px rgba(255,0,255,0.5);
+        }
+        .support-card.whatsapp {
+            background: linear-gradient(145deg, #25D366, #128C7E);
+            color: white;
+        }
+        .support-card.whatsapp:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(37, 211, 102, 0.4);
         }
     </style>
 
