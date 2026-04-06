@@ -1568,6 +1568,63 @@ tr:last-child td {
     vertical-align: middle;
 }
 
+/* Notification Toast Styles */
+#notification-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 9999;
+    width: 350px;
+    max-width: calc(100vw - 40px);
+}
+
+.notification-toast {
+    background: linear-gradient(145deg, #1a1a1a, #000);
+    border-left: 4px solid var(--accent-pink);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 10px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+    animation: slideInRight 0.3s ease;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.notification-toast:hover {
+    transform: translateX(-5px);
+    box-shadow: 0 5px 25px rgba(255,0,255,0.3);
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(400px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideOutRight {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(400px); opacity: 0; }
+}
+
+/* Admin Notification Button */
+.btn-notification {
+    background: linear-gradient(145deg, #ff00ff, #cc00cc);
+    color: white;
+    padding: 0.8rem 1.5rem;
+    border-radius: 40px;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8rem;
+    transition: all 0.3s ease;
+}
+
+.btn-notification:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 20px rgba(255,0,255,0.5);
+}
+
 /* Responsive Design */
 @media (max-width: 1200px) {
     .container { max-width: 95%; }
@@ -1640,6 +1697,13 @@ tr:last-child td {
     
     .payment-methods {
         flex-direction: column;
+    }
+    
+    #notification-container {
+        top: 70px;
+        right: 10px;
+        width: calc(100vw - 20px);
+        max-width: none;
     }
 }
 
