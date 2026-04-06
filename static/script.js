@@ -1,6 +1,134 @@
 // User Dashboard Script
 document.addEventListener('DOMContentLoaded', function() {
-    // Product selection handler
+    // ============================================
+    // NOTIFICATION SYSTEM
+    // ============================================
+    
+    // Create notification container if not exists
+    if (!document.getElementById('notification-container')) {
+        const container = document.createElement('div');
+        container.id = 'notification-container';
+        container.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+            width: 350px;
+            max-width: calc(100vw - 40px);
+        `;
+        document.body.appendChild(container);
+    }
+    
+    // Function to show notification toast
+    function showNotificationToast(title, message, notifId) {
+        const container = document.getElementById('notification-container');
+        const toast = document.createElement('div');
+        toast.className = 'notification-toast';
+        toast.setAttribute('data-id', notifId);
+        toast.style.cssText = `
+            background: linear-gradient(145deg, #1a1a1a, #000);
+            border-left: 4px solid var(--accent-pink);
+            border-right: 1px solid var(--accent-pink);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+            animation: slideInRight 0.3s ease;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        `;
+        toast.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="background: var(--accent-pink); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-bell" style="color: black; font-size: 1.2rem;"></i>
+                </div>
+                <div style="flex: 1;">
+                    <strong style="color: var(--accent-pink); display: block;">${escapeHtml(title)}</strong>
+                    <span style="color: var(--text-secondary); font-size: 0.85rem;">${escapeHtml(message)}</span>
+                </div>
+                <button class="close-toast" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem;">&times;</button>
+            </div>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Auto remove after 8 seconds
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 8000);
+        
+        // Mark as read when clicked
+        toast.addEventListener('click', function(e) {
+            if (!e.target.classList.contains('close-toast')) {
+                markNotificationRead(notifId);
+                toast.remove();
+            }
+        });
+        
+        // Close button
+        toast.querySelector('.close-toast').addEventListener('click', function(e) {
+            e.stopPropagation();
+            markNotificationRead(notifId);
+            toast.remove();
+        });
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function markNotificationRead(notifId) {
+        fetch('/api/notifications/mark_read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notification_id: notifId })
+        }).catch(err => console.error('Error marking read:', err));
+    }
+    
+    function fetchNotifications() {
+        fetch('/api/notifications')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.notifications && data.notifications.length > 0) {
+                    data.notifications.forEach(notif => {
+                        showNotificationToast(notif.title, notif.message, notif.id);
+                    });
+                }
+            })
+            .catch(err => console.error('Notification fetch error:', err));
+    }
+    
+    // Fetch notifications on load and every 30 seconds
+    setTimeout(fetchNotifications, 2000);
+    setInterval(fetchNotifications, 30000);
+    
+    // Add animation styles
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideInRight {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOutRight {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(400px); opacity: 0; }
+        }
+        .notification-toast:hover {
+            transform: translateX(-5px);
+            box-shadow: 0 5px 25px rgba(255,0,255,0.3);
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // ============================================
+    // PRODUCT SELECTION HANDLER
+    // ============================================
+    
     const productSelect = document.getElementById('product-select');
     const daysSelection = document.getElementById('days-selection');
     const daysSelect = document.getElementById('days-select');
@@ -15,7 +143,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let currentProduct = null;
 
-    // Function to update discounted price from server
     function updateDiscountedPrice() {
         if (!currentProduct) return;
         
@@ -55,11 +182,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
                 
                 costPerDay.textContent = currentProduct.cost;
-                
-                // Show days selection
                 daysSelection.style.display = 'block';
-                
-                // Trigger price update
                 updateDiscountedPrice();
             } else {
                 daysSelection.style.display = 'none';
@@ -70,27 +193,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Days selection handler
     if (daysSelect) {
         daysSelect.addEventListener('change', updateDiscountedPrice);
     }
 
-    // Generate key handler
     if (generateBtn) {
         generateBtn.addEventListener('click', function() {
             if (!currentProduct) return;
             
             const days = daysSelect.value;
-            
-            // Disable button to prevent double click
             generateBtn.disabled = true;
             generateBtn.textContent = 'Generating...';
             
             fetch('/generate_key', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     product_id: currentProduct.id,
                     days: days
@@ -101,11 +218,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) {
                     keyDisplay.textContent = data.key;
                     generatedKeyDiv.style.display = 'block';
-                    
-                    // Show success message
-                    setTimeout(() => {
-                        location.reload();
-                    }, 3000);
+                    setTimeout(() => location.reload(), 3000);
                 } else {
                     alert('Error: ' + data.error);
                     generateBtn.disabled = false;
@@ -130,9 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             fetch('/hwid_reset_all', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+                headers: { 'Content-Type': 'application/json' }
             })
             .then(response => response.json())
             .then(data => {
@@ -150,7 +261,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Individual HWID Reset
     document.querySelectorAll('.btn-hwid-reset').forEach(btn => {
         btn.addEventListener('click', function() {
             if (!confirm('Reset HWID for this license?')) return;
@@ -159,9 +269,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             fetch('/hwid_reset', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ license_id: licenseId })
             })
             .then(response => response.json())
@@ -188,10 +296,8 @@ document.addEventListener('DOMContentLoaded', function() {
         tabs.forEach(tab => {
             tab.addEventListener('click', function() {
                 const tabName = this.dataset.tab;
-                
                 tabs.forEach(t => t.classList.remove('active'));
                 tabContents.forEach(c => c.classList.remove('active'));
-                
                 this.classList.add('active');
                 document.getElementById(tabName + '-tab').classList.add('active');
             });
@@ -234,9 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             fetch('/admin/add_product', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: name,
                     credit_cost_per_day: credit_cost_per_day,
@@ -285,9 +389,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const keyType = cells[3].textContent.trim();
             Array.from(editProductKeyType.options).forEach(option => {
-                if (option.value === keyType) {
-                    option.selected = true;
-                }
+                if (option.value === keyType) option.selected = true;
             });
             
             if (editProductCustomPattern) {
@@ -309,9 +411,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             fetch('/admin/edit_product', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     product_id: productId,
                     name: name,
@@ -352,9 +452,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             fetch('/admin/delete_product', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ product_id: productId })
             })
             .then(response => response.json())
@@ -373,26 +471,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // ============================================
-    // PAYMENT ACTIONS
-    // ============================================
-
-    // Approve Payment
+    // Payment Actions
     document.querySelectorAll('.btn-approve-payment').forEach(btn => {
         btn.addEventListener('click', function() {
             if (!confirm('Approve this payment? Credits will be added to user.')) return;
             
             const paymentId = this.dataset.paymentId;
             const originalText = this.textContent;
-            
             this.disabled = true;
             this.textContent = 'Approving...';
             
             fetch('/admin/approve_payment', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ payment_id: paymentId })
             })
             .then(response => response.json())
@@ -415,12 +506,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Reject Payment
     document.querySelectorAll('.btn-reject-payment').forEach(btn => {
         btn.addEventListener('click', function() {
             const paymentId = this.dataset.paymentId;
             const reason = prompt('Enter rejection reason (optional):', 'Payment rejected by admin');
-            
             if (reason === null) return;
             
             const originalText = this.textContent;
@@ -429,13 +518,8 @@ document.addEventListener('DOMContentLoaded', function() {
             
             fetch('/admin/reject_payment', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    payment_id: paymentId,
-                    reason: reason || 'Payment rejected by admin'
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ payment_id: paymentId, reason: reason || 'Payment rejected by admin' })
             })
             .then(response => response.json())
             .then(data => {
@@ -457,22 +541,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Cancel Binance Order
     document.querySelectorAll('.btn-cancel-binance').forEach(btn => {
         btn.addEventListener('click', function() {
-            if (!confirm('⚠️ Are you sure you want to cancel this Binance order? This will delete the order permanently.')) return;
+            if (!confirm('⚠️ Are you sure you want to cancel this Binance order?')) return;
             
             const orderId = this.dataset.orderId;
             const originalText = this.textContent;
-            
             this.disabled = true;
             this.textContent = 'Cancelling...';
             
             fetch('/admin/cancel_binance_order', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ order_id: orderId })
             })
             .then(response => response.json())
@@ -495,7 +575,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Add Credits
+    // Add Credits Modal
     const addCreditsModal = document.getElementById('add-credits-modal');
     const addCreditsUsername = document.getElementById('add-credits-username');
     const addCreditsAmount = document.getElementById('add-credits-amount');
@@ -514,21 +594,14 @@ document.addEventListener('DOMContentLoaded', function() {
         confirmAddCredits.addEventListener('click', function() {
             const username = addCreditsUsername.value;
             const credits = addCreditsAmount.value;
-
             if (!credits || credits < 1) {
                 alert('Please enter a valid amount');
                 return;
             }
-
             fetch('/admin/add_credits', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    username: username,
-                    credits: credits
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username, credits: credits })
             })
             .then(response => response.json())
             .then(data => {
@@ -557,14 +630,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.btn-delete-user').forEach(btn => {
         btn.addEventListener('click', function() {
             if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
-            
             const username = this.dataset.username;
-            
             fetch('/admin/delete_user', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: username })
             })
             .then(response => response.json())
@@ -587,14 +656,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.btn-delete-key').forEach(btn => {
         btn.addEventListener('click', function() {
             if (!confirm('Are you sure you want to delete this key?')) return;
-            
             const licenseId = this.dataset.licenseId;
-            
             fetch('/admin/delete_key', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ license_id: licenseId })
             })
             .then(response => response.json())
@@ -618,7 +683,6 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             const productId = this.dataset.productId;
             const isActive = this.dataset.active === 'True' ? false : true;
-            
             fetch('/admin/toggle_product', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -652,20 +716,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const name = document.getElementById('new-keytype-name').value;
         const pattern = document.getElementById('new-keytype-pattern').value;
         const desc = document.getElementById('new-keytype-desc').value;
-        
         if (!name || !pattern) {
             alert('Name and pattern required');
             return;
         }
-        
         fetch('/admin/add_key_type', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                type_name: name,
-                pattern: pattern,
-                description: desc
-            })
+            body: JSON.stringify({ type_name: name, pattern: pattern, description: desc })
         })
         .then(r => r.json())
         .then(data => {
@@ -677,6 +735,95 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // ============================================
+    // NOTIFICATION SENDER (ADMIN ONLY)
+    // ============================================
+    
+    const sendNotificationBtn = document.getElementById('send-notification-btn');
+    const notificationModal = document.getElementById('notification-modal');
+    const closeNotificationModal = document.getElementById('close-notification-modal');
+    const sendNotificationSubmit = document.getElementById('send-notification-submit');
+    const notificationTitle = document.getElementById('notification-title');
+    const notificationMessage = document.getElementById('notification-message');
+    const notificationTarget = document.getElementById('notification-target');
+    const userListSelect = document.getElementById('user-list-select');
+    
+    // Load users list for admin
+    if (notificationTarget && userListSelect) {
+        fetch('/admin/get_users_list')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.users) {
+                    userListSelect.innerHTML = '<option value="">-- Select User --</option>';
+                    data.users.forEach(user => {
+                        userListSelect.innerHTML += `<option value="${user}">${user}</option>`;
+                    });
+                }
+            })
+            .catch(err => console.error('Error loading users:', err));
+        
+        notificationTarget.addEventListener('change', function() {
+            userListSelect.style.display = this.value === 'specific' ? 'block' : 'none';
+        });
+    }
+    
+    if (sendNotificationBtn) {
+        sendNotificationBtn.addEventListener('click', function() {
+            notificationModal.style.display = 'flex';
+        });
+    }
+    
+    if (closeNotificationModal) {
+        closeNotificationModal.addEventListener('click', function() {
+            notificationModal.style.display = 'none';
+            notificationTitle.value = '';
+            notificationMessage.value = '';
+        });
+    }
+    
+    if (sendNotificationSubmit) {
+        sendNotificationSubmit.addEventListener('click', function() {
+            const title = notificationTitle.value.trim() || 'Announcement';
+            const message = notificationMessage.value.trim();
+            const targetType = notificationTarget.value;
+            let targetUser = null;
+            
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+            
+            if (targetType === 'specific') {
+                targetUser = userListSelect.value;
+                if (!targetUser) {
+                    alert('Please select a user');
+                    return;
+                }
+            }
+            
+            fetch('/admin/send_notification', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title, message: message, target_user: targetUser })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Notification sent successfully!');
+                    notificationModal.style.display = 'none';
+                    notificationTitle.value = '';
+                    notificationMessage.value = '';
+                } else {
+                    alert('❌ Error: ' + (data.error || 'Failed to send notification'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('❌ An error occurred');
+            });
+        });
+    }
 
     // Close modals when clicking outside
     window.addEventListener('click', function(event) {
